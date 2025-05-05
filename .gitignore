@@ -1,0 +1,22 @@
+# Entorno Virtual
+.venv/
+
+# Caché de Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Archivos de VS Code
+.vscode/
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de modelos LLM grandes (si los descargas aquí)
+models/*.gguf 
+# ¡Cuidado si los modelos son muy grandes para tu repo Git!
+# Podrías querer descargarlos fuera del repo o usar Git LFS
+
+# Archivos de salida (opcional, si no quieres versionarlos)
+output/ 
