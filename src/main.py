@@ -16,7 +16,7 @@ FINAL_OUTPUT_FILE = os.path.join(SCRIPT_DIR, "..", "output", "guia_estudio.md") 
 # --- Configuración del LLM ---
 CONTEXT_SIZE = 4096
 MAX_TOKENS_MAP = 150      # Límite para el resumen/conceptos de cada chunk (Fase Map)
-MAX_TOKENS_REDUCE = 1024  # Límite más grande para la guía final (Fase Reduce) - Ajustar según necesidad
+MAX_TOKENS_REDUCE = 1536  # Límite más grande para la guía final (Fase Reduce) - Ajustar según necesidad
 N_GPU_LAYERS = -1
 N_THREADS = None
 
@@ -160,6 +160,78 @@ Conceptos Clave:
         print(f"ERROR al procesar chunk con LLM: {e}")
         return {'conceptos': [], 'resumen_breve': "", 'error_parseo': True}
 
+# --- NUEVA FUNCIÓN: Fase Reduce ---
+def sintetizar_guia_reduce(lista_resultados_map, llm_instance):
+    """Sintetiza la guía de estudio final a partir de los resultados de la Fase Map."""
+    print("\n--- Iniciando Fase Reduce ---")
+    
+    # 1. Consolidar información del Map
+    texto_consolidado = ""
+    todos_los_conceptos = set() # Usamos un set para evitar conceptos duplicados en la lista final
+
+    for i, res in enumerate(lista_resultados_map):
+        if res.get('error_parseo'): # Omitir chunks con errores de parseo
+            continue 
+        texto_consolidado += f"Resumen Parte {i+1}: {res.get('resumen_breve', 'N/A')}\n"
+        conceptos_chunk = res.get('conceptos', [])
+        if conceptos_chunk:
+             texto_consolidado += f"Conceptos Clave Parte {i+1}: {', '.join(conceptos_chunk)}\n"
+             todos_los_conceptos.update(conceptos_chunk) # Añadir al set
+        texto_consolidado += "---\n"
+
+    if not texto_consolidado:
+        print("ERROR: No hay resultados válidos de la Fase Map para procesar.")
+        return None
+
+    # 2. Preparar el Prompt "Reduce"
+    # (Aquí asumimos que no hay bibliografía externa por ahora, como acordamos)
+    prompt_reduce = f"""Contexto: Eres un asistente experto creando una guía de estudio concisa y bien estructurada en formato Markdown para una clase de Optimización.
+Has analizado la transcripción de la clase por partes. Aquí tienes un resumen de los puntos clave y conceptos identificados en cada parte:
+
+--- RESUMEN POR PARTES ---
+{texto_consolidado}
+--- FIN RESUMEN POR PARTES ---
+
+Tarea Principal: Sintetiza la información anterior en una guía de estudio completa y coherente en Markdown.
+
+Instrucciones de Formato y Contenido:
+1.  **Título Principal:** Comienza con un título principal adecuado para la guía (ej. `# Guía de Estudio: Optimización - Clase [Fecha/Tema]`).
+2.  **Estructura Lógica:** Organiza el contenido por temas principales. Usa encabezados Markdown (`##` para temas principales, `###` para subtemas). Agrupa la información relacionada de diferentes partes de la transcripción bajo el encabezado temático correspondiente.
+3.  **Contenido Claro:** Explica los conceptos de forma clara y concisa, basándote en los resúmenes proporcionados. No te limites a listar los resúmenes, intégralos en una narrativa fluida.
+4.  **Conceptos Clave:** Opcionalmente, puedes incluir una sección `## Conceptos Clave Principales` al final, listando los conceptos más importantes de forma única (extraídos de los resúmenes).
+5.  **Extensión:** Sé completo pero evita redundancias innecesarias.
+6.  **Salida:** Genera ÚNICAMENTE el contenido Markdown de la guía, empezando por el título principal. No incluyas explicaciones previas ni posteriores a la guía.
+
+Guía de Estudio en Markdown:
+# Guía de Estudio: Optimización
+""" # El LLM debería continuar desde aquí, idealmente siguiendo el formato
+
+    # 3. Llamar al LLM para la síntesis final
+    print("Generando la guía de estudio final (Fase Reduce)... Esto puede tardar.")
+    start_reduce_time = time.time()
+    try:
+        output = llm_instance(
+            prompt_reduce,
+            max_tokens=MAX_TOKENS_REDUCE,
+            stop=None, # Dejar que genere hasta el límite o termine naturalmente
+            echo=False
+        )
+        guia_markdown = output['choices'][0]['text'].strip()
+        
+        # Pequeña limpieza por si añade el título que ya pusimos
+        if guia_markdown.startswith("# Guía de Estudio: Optimización"):
+            guia_markdown = "# Guía de Estudio: Optimización" + guia_markdown[len("# Guía de Estudio: Optimización"):].lstrip()
+        else:
+             # Si no empieza con el título, lo añadimos nosotros
+             guia_markdown = "# Guía de Estudio: Optimización\n" + guia_markdown
+
+        end_reduce_time = time.time()
+        print(f"--- Fase Reduce completada en {end_reduce_time - start_reduce_time:.2f} segundos ---")
+        return guia_markdown
+
+    except Exception as e:
+        print(f"ERROR durante la Fase Reduce con LLM: {e}")
+        return None
 
 # --- Flujo Principal ---
 
@@ -208,6 +280,21 @@ with open(OUTPUT_MAP_RESULTS_FILE, 'w', encoding='utf-8') as f:
 # 5. Fase Reduce: Sintetizar la guía final (PRÓXIMO PASO)
 print("\n--- Fase Reduce: (Pendiente) ---")
 # Aquí vendrá la lógica para tomar 'resultados_map' y generar la guía final en Markdown.
+
+# --- NUEVO: 5. Fase Reduce: Sintetizar la guía final ---
+guia_final_markdown = sintetizar_guia_reduce(resultados_map, llm)
+
+# --- NUEVO: 6. Guardar Guía Final ---
+if guia_final_markdown:
+    print(f"\nGuardando la guía de estudio final en: {FINAL_OUTPUT_FILE}")
+    try:
+        with open(FINAL_OUTPUT_FILE, 'w', encoding='utf-8') as f:
+            f.write(guia_final_markdown)
+        print("¡Guía de estudio generada exitosamente!")
+    except Exception as e:
+        print(f"ERROR al guardar la guía final: {e}")
+else:
+    print("\nNo se pudo generar la guía de estudio final debido a errores previos.")
 
 # Por ahora, terminamos aquí.
 print("\n--- Proceso Map completado. Revisa 'output/map_results.txt' ---")
