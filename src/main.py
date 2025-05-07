@@ -101,65 +101,102 @@ def dividir_en_chunks(texto, tamano_chunk_palabras, superposicion_palabras):
 
 def procesar_chunk_map(chunk_texto, llm_instance):
     """Procesa un chunk individual para extraer conceptos y resumen (Fase Map)."""
-    prompt = f"""Contexto: Eres un asistente analizando fragmentos de una transcripción de clase de Optimización.
-Aquí tienes un fragmento:
---- FRAGMENTO ---
-{chunk_texto}
---- FIN FRAGMENTO ---
+    
+    prompt_map_refinado = f"""Contexto: Eres un asistente IA altamente estructurado y preciso. Tu tarea es analizar un fragmento de una transcripción de clase de Optimización y extraer los conceptos clave y un resumen.
 
-Tarea:
-1. Lista los 3-5 conceptos o temas clave más importantes discutidos en ESTE FRAGMENTO. Usa guiones (-) para cada concepto.
-2. Escribe un resumen muy breve (2-3 frases) de lo principal dicho en ESTE FRAGMENTO.
+--- INSTRUCCIONES ---
+Analiza el siguiente FRAGMENTO A PROCESAR.
+Genera tu respuesta exactamente en el FORMATO DE EJEMPLO proporcionado.
+NO añadas texto introductorio, explicaciones ni texto fuera de las etiquetas "Conceptos Clave:" y "Resumen Breve:".
 
-Respuesta:
+--- FORMATO DE EJEMPLO (SIGUE ESTA ESTRUCTURA AL PIE DE LA LETRA) ---
 Conceptos Clave:
-""" # El LLM debería continuar desde aquí
+- [Primer Concepto Importante del Fragmento]
+- [Segundo Concepto Importante del Fragmento]
+- [Tercer Concepto Importante del Fragmento]
+Resumen Breve:
+[Resumen conciso de 2 a 3 frases sobre la idea principal del fragmento.]
+--- FIN FORMATO DE EJEMPLO ---
+
+--- EJEMPLO REAL DE TRANSCRIPCIÓN Y SALIDA DESEADA ---
+Fragmento de Transcripción:
+"Okay, entonces si tenemos una función objetivo que queremos maximizar, digamos F(x, y), y tenemos un conjunto de restricciones, como x + y <= 10 y x >= 0, y >= 0. Esto define nuestra región factible, que es un polígono. Los puntos óptimos, si existen, siempre estarán en uno de los vértices de este polígono."
+Salida Deseada para ese Fragmento:
+Conceptos Clave:
+- Función Objetivo
+- Restricciones
+- Región Factible
+- Vértices
+Resumen Breve:
+Este fragmento introduce la formulación básica de un problema de optimización lineal, definiendo la función objetivo y las restricciones. Explica cómo las restricciones delimitan una región factible poligonal y menciona que los puntos óptimos se encuentran en los vértices de esta región.
+--- FIN EJEMPLO REAL ---
+
+--- FRAGMENTO A PROCESAR ---
+{chunk_texto}
+--- FIN FRAGMENTO A PROCESAR ---
+
+Tu Respuesta (siguiendo estrictamente el FORMATO DE EJEMPLO, incluyendo AMBAS etiquetas "Conceptos Clave:" y "Resumen Breve:"):
+""" # El LLM debería continuar desde aquí, idealmente siguiendo el formato
 
     try:
         output = llm_instance(
-            prompt,
+            prompt_map_refinado, # <--- Usamos el prompt refinado
             max_tokens=MAX_TOKENS_MAP,
-            stop=["Resumen Breve:", "\n\n"], # Detenerse antes de que invente demasiado
+            stop=None, # Podríamos quitar el stop si confiamos en que el formato es suficiente, o dejar stops muy genéricos como "\n\n\n"
             echo=False
         )
         texto_generado = output['choices'][0]['text'].strip()
-
-        # Parsear la salida (esto puede necesitar ajustes según cómo responda el LLM)
+        
+        # La lógica de parseo puede necesitar menos ajustes ahora, pero la mantenemos
         conceptos = []
         resumen = ""
         
-        # Buscar conceptos clave (líneas que empiezan con - o *)
-        match_conceptos = re.findall(r"^[-\*]\s*(.*)", texto_generado, re.MULTILINE)
-        if match_conceptos:
-            conceptos = [c.strip() for c in match_conceptos]
+        # Intentamos ser un poco más precisos con el parseo esperando las etiquetas
+        # Primero, encontrar el inicio de "Conceptos Clave:"
+        idx_conceptos_start = -1
+        match_conceptos_label = re.search(r"conceptos clave:", texto_generado, flags=re.IGNORECASE)
+        if match_conceptos_label:
+            idx_conceptos_start = match_conceptos_label.end()
 
-        # Buscar el resumen (lo que viene después de "Resumen Breve:", si lo genera)
-        # O tomar el texto restante después de los conceptos
-        partes = re.split(r"resumen breve:", texto_generado, flags=re.IGNORECASE)
-        if len(partes) > 1:
-             resumen = partes[1].strip()
-        else:
-             # Intenta tomar el texto que no son los conceptos
-             lineas_texto = texto_generado.split('\n')
-             lineas_resumen = [linea for linea in lineas_texto if not linea.strip().startswith(('-', '*')) and linea.strip()]
-             resumen = " ".join(lineas_resumen).strip()
-             # Si sigue vacío, puede que el LLM solo diera conceptos
-             if not resumen and not conceptos:
-                 resumen = texto_generado # fallback muy básico
+        # Luego, encontrar el inicio de "Resumen Breve:"
+        idx_resumen_start = -1
+        match_resumen_label = re.search(r"resumen breve:", texto_generado, flags=re.IGNORECASE)
+        if match_resumen_label:
+            idx_resumen_start = match_resumen_label.end()
+        
+        texto_seccion_conceptos = ""
+        if idx_conceptos_start != -1:
+            if idx_resumen_start != -1 and idx_resumen_start > idx_conceptos_start:
+                texto_seccion_conceptos = texto_generado[idx_conceptos_start:match_resumen_label.start()].strip()
+            else: # Solo hay conceptos (o el resumen viene antes, lo cual no debería según el prompt)
+                texto_seccion_conceptos = texto_generado[idx_conceptos_start:].strip()
+        
+        if texto_seccion_conceptos:
+            match_conceptos_encontrados = re.findall(r"^[-\*]\s*(.*)", texto_seccion_conceptos, re.MULTILINE)
+            if match_conceptos_encontrados:
+                conceptos = [c.strip() for c in match_conceptos_encontrados]
 
-        # Fallback si el parseo falla mucho
-        if not conceptos and not resumen:
-             print(f"ADVERTENCIA: No se pudo parsear bien la salida del Map para el chunk. Salida cruda: {texto_generado[:100]}...")
-             # Podríamos retornar la salida cruda o un diccionario vacío/marcado
-             return {'conceptos': [], 'resumen_breve': texto_generado, 'error_parseo': True}
+        if idx_resumen_start != -1:
+            resumen = texto_generado[idx_resumen_start:].strip()
+        
+        # Fallback si el parseo sigue siendo difícil o el LLM no siguió el formato
+        if not conceptos and not resumen and texto_generado:
+             # Si no pudimos parsear nada estructurado, pero hay texto,
+             # es mejor tener algo que nada. Podríamos intentar un parseo más simple
+             # o decidir que este chunk no se pudo procesar bien.
+             print(f"ADVERTENCIA: Parseo estructurado falló. Intentando fallback simple. Salida cruda: {texto_generado[:100]}...")
+             # Podrías intentar un split por "\n-" para conceptos como un último recurso, etc.
+             # Por ahora, si falla el formato estricto, marcamos como error de parseo.
+             if not (match_conceptos_label and match_resumen_label): # Si ni siquiera encontró las etiquetas
+                return {'conceptos': [], 'resumen_breve': texto_generado, 'error_parseo': True}
 
 
-        return {'conceptos': conceptos, 'resumen_breve': resumen, 'error_parseo': False}
+        return {'conceptos': conceptos, 'resumen_breve': resumen, 'error_parseo': not (conceptos or resumen)} # Error si ambos están vacíos
 
     except Exception as e:
         print(f"ERROR al procesar chunk con LLM: {e}")
         return {'conceptos': [], 'resumen_breve': "", 'error_parseo': True}
-
+    
 # --- NUEVA FUNCIÓN: Fase Reduce ---
 def sintetizar_guia_reduce(lista_resultados_map, llm_instance):
     """Sintetiza la guía de estudio final a partir de los resultados de la Fase Map."""
@@ -260,8 +297,8 @@ for i, chunk in enumerate(chunks):
     resultado_chunk = procesar_chunk_map(chunk, llm)
     resultados_map.append(resultado_chunk)
     # Opcional: Imprimir progreso
-    # print(f"  Conceptos: {resultado_chunk.get('conceptos', [])}")
-    # print(f"  Resumen: {resultado_chunk.get('resumen_breve', '')[:50]}...")
+    print(f"  Conceptos: {resultado_chunk.get('conceptos', [])}")
+    print(f"  Resumen: {resultado_chunk.get('resumen_breve', '')[:50]}...")
 
 end_map_time = time.time()
 print(f"--- Fase Map completada en {end_map_time - start_map_time:.2f} segundos ---")
