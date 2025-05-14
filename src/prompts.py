@@ -1,41 +1,33 @@
 # src/prompts.py
 
-PROMPT_MAP_REFINADO_TEMPLATE = """Contexto: Eres un asistente IA altamente estructurado y preciso. Tu tarea es analizar un fragmento de una transcripción de clase de Optimización y extraer los conceptos clave y un resumen.
+PROMPT_GENERAR_ESQUEMA_TEMPLATE = """Eres un asistente experto en análisis académico y estructuración de contenido. Tienes como entrada una transcripción completa de una clase universitaria sobre Optimización.
 
---- INSTRUCCIONES ---
-Analiza el siguiente FRAGMENTO A PROCESAR.
-Genera tu respuesta exactamente en el FORMATO DE EJEMPLO proporcionado.
-NO añadas texto introductorio, explicaciones ni texto fuera de las etiquetas "Conceptos Clave:" y "Resumen Breve:".
+--- OBJETIVO ---
+Tu tarea es analizar la transcripción completa y generar un ESQUEMA JERÁRQUICO detallado (usando numeración como 1., 1.1., 1.1.1., 2., etc.) de los temas, subtemas, conceptos clave, definiciones y ejemplos explicados durante la clase. El esquema debe reflejar la organización y el flujo lógico del contenido presentado por el profesor.
 
---- FORMATO DE EJEMPLO (SIGUE ESTA ESTRUCTURA AL PIE DE LA LETRA) ---
-Conceptos Clave:
-- [Primer Concepto Importante del Fragmento]
-- [Segundo Concepto Importante del Fragmento]
-- [Tercer Concepto Importante del Fragmento]
-Resumen Breve:
-[Resumen conciso de 2 a 3 frases sobre la idea principal del fragmento.]
---- FIN FORMATO DE EJEMPLO ---
+--- INSTRUCCIONES DETALLADAS ---
+1.  **Identifica Temas Principales:** Detecta los grandes bloques temáticos que el profesor introduce y desarrolla. Estos serán tus puntos de nivel 1 (ej. 1. Introducción a la Programación Lineal, 2. Método Simplex, etc.).
+2.  **Desglosa en Subtemas:** Dentro de cada tema principal, identifica los subtemas o componentes específicos que se explican. Estos serán puntos de nivel 2 (ej. 1.1. Definición de Función Objetivo, 1.2. Tipos de Restricciones).
+3.  **Incluye Detalles Relevantes:** Para cada subtema, si es aplicable, incluye:
+    *   Conceptos clave específicos introducidos.
+    *   Definiciones importantes proporcionadas.
+    *   Ejemplos ilustrativos mencionados.
+    *   Preguntas relevantes de estudiantes y las respuestas del profesor si aportan al contenido académico.
+    Estos pueden ser puntos de nivel 3 o superior (ej. 1.2.1. Restricciones de no negatividad, 1.2.2. Ejemplo de problema de producción).
+4.  **Filtra Contenido No Académico:** OMITE deliberadamente partes de la transcripción que no sean contenido académico relevante. Esto incluye:
+    *   Tangentes o divagaciones del profesor sobre temas no relacionados (ej. el clima, anécdotas personales no ilustrativas).
+    *   Interrupciones logísticas (ej. "Voy a borrar la pizarra", "¿Se escucha bien al fondo?").
+    *   Conversaciones administrativas o sociales que no aporten al entendimiento de la materia.
+5.  **Refleja la Progresión:** El esquema debe seguir el orden en que los temas fueron presentados en la clase.
+6.  **Claridad y Concisión:** Usa frases concisas para describir cada punto del esquema. No escribas párrafos largos dentro del esquema.
+7.  **Formato Estricto:** Utiliza únicamente numeración jerárquica (1., 1.1., 1.1.1., 2., etc.). No uses viñetas (-, *).
 
---- EJEMPLO REAL DE TRANSCRIPCIÓN Y SALIDA DESEADA ---
-Fragmento de Transcripción:
-"Okay, entonces si tenemos una función objetivo que queremos maximizar, digamos F(x, y), y tenemos un conjunto de restricciones, como x + y <= 10 y x >= 0, y >= 0. Esto define nuestra región factible, que es un polígono. Los puntos óptimos, si existen, siempre estarán en uno de los vértices de este polígono."
-Salida Deseada para ese Fragmento:
-Conceptos Clave:
-- Función Objetivo
-- Restricciones
-- Región Factible
-- Vértices
-Resumen Breve:
-Este fragmento introduce la formulación básica de un problema de optimización lineal, definiendo la función objetivo y las restricciones. Explica cómo las restricciones delimitan una región factible poligonal y menciona que los puntos óptimos se encuentran en los vértices de esta región.
---- FIN EJEMPLO REAL ---
+--- TRANSCRIPCIÓN COMPLETA ---
+{texto_completo}
+--- FIN TRANSCRIPCIÓN COMPLETA ---
 
---- FRAGMENTO A PROCESAR ---
-{chunk_texto}
---- FIN FRAGMENTO A PROCESAR ---
-
-Tu Respuesta (siguiendo estrictamente el FORMATO DE EJEMPLO, incluyendo AMBAS etiquetas "Conceptos Clave:" y "Resumen Breve:"):
+Esquema estructurado y jerárquico de la clase (comienza con 1.):
 """
-
 
 PROMPT_REDUCE_TEMPLATE = """Contexto: Eres un asistente experto creando una guía de estudio concisa y bien estructurada en formato Markdown para una clase de Optimización.
 Has analizado la transcripción de la clase por partes. Aquí tienes un resumen de los puntos clave y conceptos identificados en cada parte:

@@ -5,58 +5,45 @@ from src import utils
 from src import llm_processing
 
 def main():
-    """Función principal para orquestar el proceso completo."""
+    """Función principal para orquestar el proceso de generación de esquema."""
     
-    # 0. Crear directorios necesarios
     utils.crear_directorios_necesarios()
 
-    # 1. Cargar el modelo LLM
     llm = llm_processing.cargar_modelo_llm()
-    if llm is None: # Si la carga falla, cargar_modelo_llm retorna None
+    if llm is None:
         print("Saliendo del programa debido a un error en la carga del modelo.")
-        return # Salir si el modelo no se carga
+        return
 
-    # 2. Leer Transcripción
-    print("\n--- Iniciando Proceso Map-Reduce ---")
+    print("\n--- Iniciando Proceso de Generación de Esquema ---")
     texto_completo = utils.leer_archivo(config.INPUT_FILE_PATH)
     if not texto_completo:
-        return # Salir si no hay texto
-    print(f"Transcripción leída ({len(texto_completo)} caracteres).")
-
-    # 3. Dividir en Chunks
-    chunks = utils.dividir_en_chunks(texto_completo, config.CHUNK_SIZE_WORDS, config.CHUNK_OVERLAP_WORDS)
-    if not chunks:
-        print("ERROR: No se pudieron generar chunks del texto.")
         return
-    print(f"Texto dividido en {len(chunks)} chunks.")
+    
+    num_palabras = len(texto_completo.split())
+    estimacion_tokens = int(num_palabras * 1.5) # Factor de estimación aproximado
+    print(f"Transcripción leída: {len(texto_completo)} caracteres, ~{num_palabras} palabras, ~{estimacion_tokens} tokens estimados.")
 
-    # 4. Fase Map: Procesar cada chunk
-    print("\n--- Fase Map: Procesando Chunks ---")
-    resultados_map = []
-    start_map_time = time.time()
+    # Advertencia si la estimación de tokens es muy cercana o excede el contexto
+    # Dejar un margen para el prompt y la salida generada
+    margen_prompt_salida = 4096 # Estimación conservadora para el prompt y algo de salida
+    if estimacion_tokens > (config.CONTEXT_SIZE - margen_prompt_salida):
+        print(f"ADVERTENCIA: La transcripción estimada ({estimacion_tokens} tokens) más el margen para prompt/salida "
+              f"podría ser demasiado larga para el CONTEXT_SIZE configurado ({config.CONTEXT_SIZE} tokens).")
+        print("El resultado podría ser incompleto o podrían ocurrir errores de memoria.")
+        # Considerar una estrategia de "mega-chunking" aquí si esto se vuelve un problema recurrente.
 
-    for i, chunk in enumerate(chunks):
-        print(f"Procesando chunk {i+1}/{len(chunks)}...")
-        # Pasamos la instancia del LLM cargada (aunque llm_processing.py la tiene global)
-        resultado_chunk = llm_processing.procesar_chunk_map(chunk) 
-        resultados_map.append(resultado_chunk)
-        print(f"  Conceptos: {resultado_chunk.get('conceptos', [])}")
-        print(f"  Resumen: {resultado_chunk.get('resumen_breve', '')[:50]}...")
+    esquema_clase = llm_processing.generar_esquema_desde_transcripcion(texto_completo)
 
-    end_map_time = time.time()
-    print(f"--- Fase Map completada en {end_map_time - start_map_time:.2f} segundos ---")
+    utils.guardar_texto_a_archivo(esquema_clase, config.OUTPUT_ESQUEMA_PATH, "esquema de la clase")
 
-    # 5. Guardar Resultados Intermedios (Map)
-    utils.guardar_resultados_map(resultados_map, config.OUTPUT_MAP_RESULTS_PATH)
+    print("\n--- Proceso de Generación de Esquema Terminado ---")
 
-    # 6. Fase Reduce: Sintetizar la guía final
-    # Pasamos la instancia del LLM cargada (aunque llm_processing.py la tiene global)
-    guia_final_markdown = llm_processing.sintetizar_guia_reduce(resultados_map)
-
-    # 7. Guardar Guía Final
-    utils.guardar_guia_final(guia_final_markdown, config.FINAL_OUTPUT_PATH)
-
-    print("\n--- Proceso Completo Terminado ---")
+    # --- Paso Futuro: Generar Apuntes ---
+    # if esquema_clase:
+    #     print("\n--- Iniciando Generación de Apuntes Detallados (Paso Futuro) ---")
+    #     apuntes_completos = llm_processing.generar_apuntes_desde_esquema(texto_completo, esquema_clase)
+    #     utils.guardar_texto_a_archivo(apuntes_completos, config.OUTPUT_APUNTES_PATH, "apuntes de la clase")
+    #     print("\n--- Proceso Completo Terminado ---")
 
 if __name__ == "__main__":
     main()
