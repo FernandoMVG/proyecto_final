@@ -19,4 +19,5 @@ models/*.gguf
 # Podrías querer descargarlos fuera del repo o usar Git LFS
 
 # Archivos de salida (opcional, si no quieres versionarlos)
-output/ 
+output/
+data/  
