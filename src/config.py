@@ -19,16 +19,26 @@ OUTPUT_ESQUEMA_PATH = os.path.join(BASE_PROJECT_DIR, "output", OUTPUT_ESQUEMA_FI
 
 # --- Configuración del LLM ---
 # ¡IMPORTANTE! Aumenta CONTEXT_SIZE al máximo que tu modelo y hardware soporten
-CONTEXT_SIZE = 16384  # Ejemplo: 30k tokens. Prueba con 16384, 32768 según tu Mistral 7B.
-                      # Verifica la documentación de tu modelo GGUF específico.
+CONTEXT_SIZE = 16384  # Esto es el tamaño máximo de contexto del modelo
+                      
 # Necesitaremos muchos tokens para generar un esquema detallado de una clase larga
-MAX_TOKENS_ESQUEMA = 4096 # Empieza con esto, podrías necesitar aumentarlo a 8192 o más.
-# MAX_TOKENS_APUNTES = 8192 # Para cuando generes los apuntes (más adelante)
+# MAX_TOKENS_ESQUEMA = 4096 # Empieza con esto, podrías necesitar aumentarlo a 8192 o más.
+# # MAX_TOKENS_APUNTES = 8192 # Para cuando generes los apuntes (más adelante)
+
+MAX_TOKENS_ESQUEMA_PARCIAL = 2048 # Tokens para el esquema de un mega-chunk
+MAX_TOKENS_ESQUEMA_FUSIONADO = 4096 # Tokens para el esquema final fusionado
+
 N_GPU_LAYERS = -1
 N_THREADS = None
 LLM_VERBOSE = False
 LLM_TEMPERATURE_ESQUEMA = 0.3 # Temperatura para la generación del esquema
+LLM_TEMPERATURE_FUSION = 0.2 # Más bajo para una fusión más literal
 
-# --- Ya no necesitamos configuración de chunking ---
-# CHUNK_SIZE_WORDS = 700
-# CHUNK_OVERLAP_WORDS = 50
+# --- Configuración del Mega-Chunking ---
+# Factor de seguridad: qué porcentaje del CONTEXT_SIZE podemos usar para texto + prompt
+# dejando el resto para la generación de la respuesta del esquema parcial.
+# Un valor más bajo es más seguro pero puede generar más mega-chunks.
+MEGA_CHUNK_CONTEXT_FACTOR = 0.7 
+# Solapamiento entre mega-chunks (en número de palabras)
+MEGA_CHUNK_OVERLAP_WORDS = 200
+FACTOR_PALABRAS_A_TOKENS_APROX = 1.7 
