@@ -102,3 +102,56 @@ Redactar apuntes completos y claros, como si fueran para un estudiante que neces
 
 Apuntes de Clase Detallados en Markdown (comienza con el primer encabezado basado en el esquema):
 """
+
+PROMPT_GENERAR_APUNTES_DESDE_ESQUEMA_CONOCIMIENTO_LLM_TEMPLATE = """Eres un asistente experto en redacción académica y creación de material de estudio sobre Optimización. Tu tarea es generar apuntes de clase detallados y bien estructurados en formato Markdown, basándote ÚNICAMENTE en el ESQUEMA JERÁRQUICO proporcionado y tu conocimiento general sobre los temas listados.
+
+--- OBJETIVO ---
+Redactar apuntes completos y claros que expliquen los temas y conceptos del ESQUEMA. Imagina que estás creando material de estudio general sobre estos tópicos.
+
+--- INSTRUCCIONES DETALLADAS ---
+1.  **Sigue el Esquema:** Utiliza el ESQUEMA como la estructura principal de tus apuntes. Cada punto y subpunto del esquema debe convertirse en una sección o subsección en tus apuntes (usando encabezados Markdown apropiados: #, ##, ###, etc., correspondientes a la jerarquía del esquema).
+2.  **Elabora con tu Conocimiento:** Para CADA PUNTO del esquema, redacta una explicación clara y detallada utilizando tu conocimiento general sobre Optimización y temas relacionados.
+3.  **Profundidad y Claridad:**
+    *   Define los conceptos clave mencionados en el esquema.
+    *   Explica los procesos o métodos descritos.
+    *   Si es apropiado, puedes inventar ejemplos simples para ilustrar los puntos del esquema.
+    *   Asegúrate de que las explicaciones sean comprensibles, pedagógicas y académicamente correctas.
+4.  **Formato Markdown:**
+    *   Usa encabezados para los títulos de temas y subtemas según el esquema.
+    *   Utiliza listas con viñetas (`-` o `*`) para enumeraciones o puntos clave dentro de una explicación.
+    *   Usa **negrita** para resaltar términos importantes.
+    *   Si mencionas fórmulas generales o pseudocódigo, intenta representarlo de la mejor manera posible en Markdown.
+5.  **Fluidez y Coherencia:** Asegúrate de que los apuntes fluyan bien de una sección a otra y que el lenguaje sea académico y preciso.
+6.  **Extensión:** Sé lo suficientemente detallado para que los apuntes sean útiles, pero evita la palabrería innecesaria. La longitud de cada sección dependerá de la complejidad del punto del esquema.
+7.  **NO te refieras a una "clase" o "profesor" específico, ya que no tienes la transcripción.** Habla en términos generales sobre los temas.
+
+--- ESQUEMA DETALLADO DE TEMAS (Guía para la estructura y contenido a desarrollar) ---
+{esquema_clase}
+--- FIN ESQUEMA DETALLADO ---
+
+Apuntes Detallados en Markdown (basados en tu conocimiento y el esquema, comienza con el primer encabezado):
+"""
+
+PROMPT_DESARROLLAR_SECCION_ESQUEMA_CONOCIMIENTO_LLM_TEMPLATE = """Eres un asistente experto en redacción académica y creación de material de estudio sobre Optimización. Tu tarea es desarrollar DETALLADAMENTE UNA SECCIÓN específica de un esquema de clase, utilizando tu conocimiento general sobre los temas listados en esa sección. El objetivo es producir apuntes que se lean como explicaciones narrativas y bien desarrolladas.
+
+--- OBJETIVO ---
+Redactar apuntes completos y claros que expliquen los temas y conceptos de la SECCIÓN DEL ESQUEMA proporcionada, utilizando principalmente párrafos explicativos.
+
+--- INSTRUCCIONES DETALLADAS PARA ESTA SECCIÓN ---
+1.  **Enfócate en la Sección Dada:** Utiliza la "SECCIÓN DEL ESQUEMA A DESARROLLAR" como la estructura principal para tus apuntes de esta sección. Cada punto y subpunto de esta sección del esquema debe convertirse en un encabezado o sub-encabezado Markdown si es apropiado, seguido de una explicación desarrollada.
+2.  **Elabora con tu Conocimiento en Párrafos:** Para CADA PUNTO de la sección del esquema proporcionada, redacta una explicación clara y detallada utilizando tu conocimiento general sobre Optimización y temas relacionados. **Prioriza el uso de párrafos bien construidos para explicar los conceptos, procesos y métodos.**
+3.  **Profundidad y Claridad:**
+    *   Define los conceptos clave mencionados.
+    *   Explica los procesos o métodos descritos en detalle.
+    *   Si es apropiado, incluye ejemplos simples para ilustrar los puntos, integrándolos en la narrativa.
+    *   Asegúrate de que las explicaciones sean comprensibles, pedagógicas y académicamente correctas.
+4.  **Uso Moderado de Listas:** Puedes usar listas con viñetas (`-` o `*`) de forma **moderada y solo cuando sea estrictamente necesario** para enumerar elementos discretos (ej. pasos de un algoritmo, tipos de variables, etc.). **Evita abusar de los bullet points; prefiere la prosa explicativa.**
+5.  **Formato Markdown:** Usa encabezados para la estructura. Usa **negrita** para resaltar términos importantes dentro de los párrafos.
+6.  **Salida:** Genera ÚNICAMENTE el contenido Markdown para ESTA SECCIÓN. Comienza directamente con el primer encabezado o texto de la sección. NO incluyas la frase "Continúa el proceso..." ni frases similares.
+
+--- SECCIÓN DEL ESQUEMA A DESARROLLAR ---
+{sub_esquema}
+--- FIN SECCIÓN DEL ESQUEMA ---
+
+Apuntes Detallados para ESTA SECCIÓN (en Markdown, usando principalmente párrafos):
+"""

@@ -26,6 +26,7 @@ CONTEXT_SIZE = 16384  # Esto es el tamaño máximo de contexto del modelo
 # Necesitaremos muchos tokens para generar un esquema detallado de una clase larga
 # MAX_TOKENS_ESQUEMA = 4096 # Empieza con esto, podrías necesitar aumentarlo a 8192 o más.
 MAX_TOKENS_APUNTES = 8192 # Para cuando generes los apuntes (más adelante)
+MAX_TOKENS_APUNTES_POR_SECCION = 1024
 
 MAX_TOKENS_ESQUEMA_PARCIAL = 2048 # Tokens para el esquema de un mega-chunk
 MAX_TOKENS_ESQUEMA_FUSIONADO = 4096 # Tokens para el esquema final fusionado

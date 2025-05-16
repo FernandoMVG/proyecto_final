@@ -1,9 +1,10 @@
 # src/main.py
 import time
-from . import config 
-from . import utils
-from . import llm_processing
-from . import prompts
+from src import config 
+from src import utils
+from src import llm_processing
+import re
+from src import prompts
 
 def main():
     # --- Fase de Inicialización ---
@@ -84,15 +85,42 @@ def main():
     # print("\n--- Fin Fase de Generación de Esquema ---") # Comentado o renombrar a "Carga de Esquema"
     # --- FIN: SECCIÓN MODIFICADA ---
     
-    # --- Fase de Generación de Apuntes Detallados ---
-    # Esta parte permanece igual, pero ahora usará el esquema_final cargado
-    print("\n--- Fase de Generación de Apuntes Detallados ---")
-    apuntes_completos = llm_processing.generar_apuntes_desde_esquema(texto_completo, esquema_final)
+   # --- Fase de Generación de Apuntes Detallados (Por Sección del Esquema, Conocimiento LLM) ---
+    print("\n--- Fase de Generación de Apuntes (Por Sección, Conocimiento LLM) ---")
     
-    utils.guardar_texto_a_archivo(apuntes_completos, config.OUTPUT_APUNTES_PATH, "apuntes detallados de la clase")
-    print("--- Fin Fase de Generación de Apuntes Detallados ---")
+    # Dividir el esquema_final_texto en secciones principales
+    # Asumimos que los temas principales empiezan con "X." (ej. "1.", "2.")
+    # Esta expresión regular busca una línea que empiece con uno o más dígitos, un punto y un espacio.
+    # El (?=...) es un "positive lookahead" para no incluir el delimitador en el resultado del split.
+    secciones_del_esquema = re.split(r"\n(?=\d+\.\s)", esquema_final)
+    secciones_del_esquema = [s.strip() for s in secciones_del_esquema if s.strip()]
+
+    apuntes_completos_concatenados = f"# Guía de Estudio Detallada: Optimización (Basada en Conocimiento del LLM)\n\n"
+
+    if not secciones_del_esquema:
+        print("ADVERTENCIA: No se pudieron identificar secciones principales en el esquema. Intentando procesar como una sola sección.")
+        # Si no hay secciones claras, intenta generar apuntes para todo el esquema (puede fallar por contexto o ser malo)
+        apuntes_para_esta_seccion = llm_processing.generar_apuntes_para_seccion_esquema_conocimiento_llm(esquema_final)
+        if apuntes_para_esta_seccion:
+            apuntes_completos_concatenados += apuntes_para_esta_seccion
+    else:
+        print(f"Esquema dividido en {len(secciones_del_esquema)} secciones principales para generar apuntes.")
+        for i, seccion_esq_actual in enumerate(secciones_del_esquema):
+            apuntes_para_esta_seccion = llm_processing.generar_apuntes_para_seccion_esquema_conocimiento_llm(
+                seccion_esq_actual
+            )
+            if apuntes_para_esta_seccion:
+                # Extraer el título de la sección del esquema para usarlo como encabezado Markdown
+                # Asumimos que la primera línea de seccion_esq_actual es el título principal de esa sección
+                titulo_seccion = seccion_esq_actual.split('\n')[0].strip()
+                apuntes_completos_concatenados += f"## {titulo_seccion}\n{apuntes_para_esta_seccion}\n\n"
+            else:
+                print(f"ADVERTENCIA: No se generaron apuntes para la sección del esquema que comienza con: '{seccion_esq_actual.splitlines()[0] if seccion_esq_actual else 'Sección vacía'}'")
+
+    utils.guardar_texto_a_archivo(apuntes_completos_concatenados.strip(), config.OUTPUT_APUNTES_PATH, "apuntes (conocimiento LLM, por sección)")
+    print("--- Fin Fase de Generación de Apuntes (Conocimiento LLM) ---")
     
-    print("\n--- Proceso Completo Terminado (Solo Generación de Apuntes) ---")
+    print("\n--- Proceso Completo Terminado ---")
 
 if __name__ == "__main__":
     main()

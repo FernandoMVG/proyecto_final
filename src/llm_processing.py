@@ -216,3 +216,120 @@ def generar_apuntes_desde_esquema(texto_completo, esquema_clase):
     except Exception as e:
         print(f"ERROR durante la generación de apuntes con LLM: {e}")
         return None    
+
+def generar_apuntes_con_conocimiento_llm(esquema_clase):
+    """
+    Genera apuntes detallados en Markdown usando SOLO el esquema y el conocimiento del LLM.
+    """
+    if llm_instance is None:
+        print("ERROR: Modelo LLM no cargado en generar_apuntes_con_conocimiento_llm.")
+        return None
+    if not esquema_clase:
+        print("ERROR: Se requiere el esquema de la clase para generar apuntes.")
+        return None
+
+    print("\n--- Iniciando Generación de Apuntes (Basado en Esquema y Conocimiento del LLM) ---")
+    
+    prompt_final_apuntes = prompts.PROMPT_GENERAR_APUNTES_DESDE_ESQUEMA_CONOCIMIENTO_LLM_TEMPLATE.format(
+        esquema_clase=esquema_clase
+    )
+
+    # Estimación de tokens para este prompt (esquema + instrucciones)
+    estimacion_tokens_prompt_apuntes = len(prompt_final_apuntes.split()) * config.FACTOR_PALABRAS_A_TOKENS_APROX
+    # Dejar un buen margen para la generación de los apuntes. MAX_TOKENS_APUNTES debe ser grande.
+    if estimacion_tokens_prompt_apuntes > config.CONTEXT_SIZE - config.MAX_TOKENS_APUNTES: 
+        print(f"ADVERTENCIA: El prompt para generar apuntes ({estimacion_tokens_prompt_apuntes:.0f} tokens est.) "
+              f"más los tokens de salida ({config.MAX_TOKENS_APUNTES}) podrían exceder el CONTEXT_SIZE ({config.CONTEXT_SIZE}). "
+              "Los apuntes podrían ser incompletos o fallar.")
+
+    print(f"Enviando esquema al LLM para generar apuntes (max_tokens: {config.MAX_TOKENS_APUNTES})... Esto puede tardar.")
+    start_time = time.time()
+    try:
+        output = llm_instance(
+            prompt_final_apuntes,
+            max_tokens=config.MAX_TOKENS_APUNTES,
+            stop=None, 
+            echo=False,
+            temperature=config.LLM_TEMPERATURE_APUNTES 
+        )
+        
+        apuntes_generados = ""
+        finish_reason = "desconocido"
+
+        if output and 'choices' in output and len(output['choices']) > 0:
+            apuntes_generados = output['choices'][0]['text'].strip()
+            finish_reason = output['choices'][0].get('finish_reason', 'desconocido')
+        else:
+            print(f"ADVERTENCIA: La salida del LLM para los apuntes fue inesperada o vacía.")
+            return None
+
+        end_time = time.time()
+        minutos_apuntes = (end_time - start_time) / 60
+        print(f"--- Apuntes (conocimiento LLM) generados en {end_time - start_time:.2f} segundos --- Minutos aproximados: {minutos_apuntes:.2f} (Finish Reason: {finish_reason}) ---")
+
+        if finish_reason == 'length':
+            print(f"    ¡¡¡ADVERTENCIA DE CORTE!!! La generación de apuntes se detuvo porque alcanzó el límite de max_tokens ({config.MAX_TOKENS_APUNTES}).")
+            print(f"    Últimos 100 caracteres generados: '...{apuntes_generados[-100:]}'")
+        elif finish_reason not in ['stop', 'eos_token', 'desconocido']:
+             print(f"    ADVERTENCIA: Razón de finalización inusual para los apuntes: {finish_reason}")
+        
+        return apuntes_generados
+
+    except Exception as e:
+        print(f"ERROR durante la generación de apuntes (conocimiento LLM) con LLM: {e}")
+        return None
+    
+def generar_apuntes_para_seccion_esquema_conocimiento_llm(sub_esquema):
+    if llm_instance is None:
+        print("ERROR: Modelo LLM no cargado.")
+        return None
+    if not sub_esquema:
+        print("ERROR: Se requiere un sub-esquema.")
+        return "" # Devolver string vacío para facilitar concatenación
+
+    # Extraer un título tentativo para el print de la primera línea del sub_esquema
+    titulo_seccion_aprox = sub_esquema.split('\n')[0].strip()
+    print(f"\n--- Desarrollando apuntes para sección del esquema: '{titulo_seccion_aprox}' ---")
+    
+    prompt_final = prompts.PROMPT_DESARROLLAR_SECCION_ESQUEMA_CONOCIMIENTO_LLM_TEMPLATE.format(
+        sub_esquema=sub_esquema
+    )
+
+    # Estimación de tokens (ahora el prompt es más corto)
+    estimacion_tokens_prompt = len(prompt_final.split()) * config.FACTOR_PALABRAS_A_TOKENS_APROX
+    # MAX_TOKENS_APUNTES_POR_SECCION debe estar en config.py
+    if estimacion_tokens_prompt > config.CONTEXT_SIZE - config.MAX_TOKENS_APUNTES_POR_SECCION:
+        print(f"    ADVERTENCIA: El prompt para la sección ({estimacion_tokens_prompt:.0f} tokens est.) "
+              f"más la salida ({config.MAX_TOKENS_APUNTES_POR_SECCION}) podría exceder CONTEXT_SIZE ({config.CONTEXT_SIZE}).")
+
+    print(f"Enviando sub-esquema al LLM (max_tokens: {config.MAX_TOKENS_APUNTES_POR_SECCION})...")
+    start_time = time.time()
+    try:
+        output = llm_instance(
+            prompt_final,
+            max_tokens=config.MAX_TOKENS_APUNTES_POR_SECCION, # Usar la config para tokens por sección
+            stop=None, 
+            echo=False,
+            temperature=config.LLM_TEMPERATURE_APUNTES
+        )
+        
+        apuntes_seccion = ""
+        finish_reason = "desconocido"
+        if output and 'choices' in output and len(output['choices']) > 0:
+            apuntes_seccion = output['choices'][0]['text'].strip()
+            finish_reason = output['choices'][0].get('finish_reason', 'desconocido')
+        else:
+            print(f"    ADVERTENCIA: Salida vacía del LLM para la sección '{titulo_seccion_aprox}'.")
+            return ""
+
+        end_time = time.time()
+        minutos = (end_time - start_time) / 60
+        print(f"--- Apuntes para sección '{titulo_seccion_aprox}' generados en {end_time - start_time:.2f} s ({minutos:.2f} min) (Finish: {finish_reason}) ---")
+
+        if finish_reason == 'length':
+            print(f"    ¡¡¡CORTE!!! Sección '{titulo_seccion_aprox}' se cortó (max_tokens: {config.MAX_TOKENS_APUNTES_POR_SECCION}).")
+        
+        return apuntes_seccion
+    except Exception as e:
+        print(f"ERROR al generar apuntes para sección '{titulo_seccion_aprox}': {e}")
+        return ""
