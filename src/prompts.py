@@ -46,26 +46,6 @@ PROMPT_FUSIONAR_ESQUEMAS_TEMPLATE = """Eres un editor experto y organizador de c
 ESQUEMA MAESTRO FUSIONADO Y COMPLETO (comienza con 1.):
 """
 
-PROMPT_REDUCE_TEMPLATE = """Contexto: Eres un asistente experto creando una guía de estudio concisa y bien estructurada en formato Markdown para una clase de Optimización.
-Has analizado la transcripción de la clase por partes. Aquí tienes un resumen de los puntos clave y conceptos identificados en cada parte:
-
---- RESUMEN POR PARTES ---
-{texto_consolidado}
---- FIN RESUMEN POR PARTES ---
-
-Tarea Principal: Sintetiza la información anterior en una guía de estudio completa y coherente en Markdown.
-
-Instrucciones de Formato y Contenido:
-1.  **Título Principal:** Comienza con un título principal adecuado para la guía (ej. `# Guía de Estudio: Optimización - Clase [Fecha/Tema]`).
-2.  **Estructura Lógica:** Organiza el contenido por temas principales. Usa encabezados Markdown (`##` para temas principales, `###` para subtemas). Agrupa la información relacionada de diferentes partes de la transcripción bajo el encabezado temático correspondiente.
-3.  **Contenido Claro:** Explica los conceptos de forma clara y concisa, basándote en los resúmenes proporcionados. No te limites a listar los resúmenes, intégralos en una narrativa fluida.
-4.  **Conceptos Clave:** Opcionalmente, puedes incluir una sección `## Conceptos Clave Principales` al final, listando los conceptos más importantes de forma única (extraídos de los resúmenes).
-5.  **Extensión:** Sé completo pero evita redundancias innecesarias.
-6.  **Salida:** Genera ÚNICAMENTE el contenido Markdown de la guía, empezando por el título principal. No incluyas explicaciones previas ni posteriores a la guía.
-
-Guía de Estudio en Markdown:
-# Guía de Estudio: Optimización
-"""
 
 PROMPT_GENERAR_APUNTES_TEMPLATE = """Eres un asistente experto en redacción académica y creación de material de estudio. Tu tarea es generar apuntes de clase detallados y bien estructurados en formato Markdown.
 Utilizarás dos fuentes principales:
