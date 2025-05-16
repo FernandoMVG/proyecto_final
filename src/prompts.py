@@ -66,3 +66,39 @@ Instrucciones de Formato y Contenido:
 Guía de Estudio en Markdown:
 # Guía de Estudio: Optimización
 """
+
+PROMPT_GENERAR_APUNTES_TEMPLATE = """Eres un asistente experto en redacción académica y creación de material de estudio. Tu tarea es generar apuntes de clase detallados y bien estructurados en formato Markdown.
+Utilizarás dos fuentes principales:
+1.  La TRANSCRIPCIÓN COMPLETA de la clase.
+2.  Un ESQUEMA JERÁRQUICO detallado de los temas tratados en esa clase (que fue generado previamente a partir de la transcripción).
+
+--- OBJETIVO ---
+Redactar apuntes completos y claros, como si fueran para un estudiante que necesita entender a fondo la materia de la clase. Los apuntes deben seguir la estructura del ESQUEMA proporcionado y extraer la información detallada de la TRANSCRIPCIÓN.
+
+--- INSTRUCCIONES DETALLADAS ---
+1.  **Sigue el Esquema:** Utiliza el ESQUEMA como la estructura principal de tus apuntes. Cada punto y subpunto del esquema debe convertirse en una sección o subsección en tus apuntes (usando encabezados Markdown apropiados: #, ##, ###, etc., correspondientes a la jerarquía del esquema).
+2.  **Extrae de la Transcripción:** Para CADA PUNTO del esquema, localiza la información relevante en la TRANSCRIPCIÓN COMPLETA y utilízala para redactar una explicación clara y detallada. No te limites a copiar fragmentos; reelabora y sintetiza la información.
+3.  **Profundidad y Claridad:**
+    *   Define los conceptos clave mencionados en el esquema.
+    *   Explica los procesos o métodos descritos.
+    *   Si el esquema menciona ejemplos, incorpóralos en tu redacción.
+    *   Asegúrate de que las explicaciones sean comprensibles y pedagógicas.
+4.  **Formato Markdown:**
+    *   Usa encabezados para los títulos de temas y subtemas según el esquema.
+    *   Utiliza listas con viñetas (`-` o `*`) para enumeraciones o puntos clave dentro de una explicación.
+    *   Usa **negrita** para resaltar términos importantes.
+    *   Si hay fórmulas o código simple mencionado, intenta representarlo de la mejor manera posible en Markdown (ej. usando bloques de código ` ``` ` o comillas invertidas para `código inline`).
+5.  **Fluidez y Coherencia:** Asegúrate de que los apuntes fluyan bien de una sección a otra y que el lenguaje sea académico y preciso.
+6.  **Omite Contenido Irrelevante:** Aunque la transcripción completa se proporciona como referencia, céntrate en desarrollar los puntos del ESQUEMA. Evita incluir información de la transcripción que no esté directamente relacionada con los temas del esquema.
+7.  **Extensión:** Sé lo suficientemente detallado para que los apuntes sean útiles, pero evita la palabrería innecesaria. La longitud de cada sección dependerá de la cantidad de información relevante en la transcripción para ese punto del esquema.
+
+--- ESQUEMA DETALLADO DE LA CLASE (Guía para la estructura) ---
+{esquema_clase}
+--- FIN ESQUEMA DETALLADO ---
+
+--- TRANSCRIPCIÓN COMPLETA DE LA CLASE (Fuente principal para el contenido) ---
+{texto_completo}
+--- FIN TRANSCRIPCIÓN COMPLETA ---
+
+Apuntes de Clase Detallados en Markdown (comienza con el primer encabezado basado en el esquema):
+"""
