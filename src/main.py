@@ -1,9 +1,9 @@
 # src/main.py
 import time
-from . import config 
-from . import utils
-from . import llm_processing
-from . import prompts
+from src import config 
+from src import utils
+from src import llm_processing
+from src import prompts
 
 def main():
     # --- Fase de Inicialización ---
@@ -24,9 +24,9 @@ def main():
     
     num_palabras_total = len(texto_completo.split())
     # Las siguientes líneas son para la estimación del esquema, podemos comentarlas si no generamos esquema
-    # prompt_base_sin_texto_esquema = prompts.PROMPT_GENERAR_ESQUEMA_TEMPLATE.replace("{texto_completo}", "")
-    # prompt_base_esquema_len_tokens = len(prompt_base_sin_texto_esquema.split()) * config.FACTOR_PALABRAS_A_TOKENS_APROX
-    # max_tokens_contenido_chunk = int((config.CONTEXT_SIZE - prompt_base_esquema_len_tokens) * config.MEGA_CHUNK_CONTEXT_FACTOR)
+    prompt_base_sin_texto_esquema = prompts.PROMPT_GENERAR_ESQUEMA_TEMPLATE.replace("{texto_completo}", "")
+    prompt_base_esquema_len_tokens = len(prompt_base_sin_texto_esquema.split()) * config.FACTOR_PALABRAS_A_TOKENS_APROX
+    max_tokens_contenido_chunk = int((config.CONTEXT_SIZE - prompt_base_esquema_len_tokens) * config.MEGA_CHUNK_CONTEXT_FACTOR)
     estimacion_tokens_transcripcion_total = int(num_palabras_total * config.FACTOR_PALABRAS_A_TOKENS_APROX)
 
     print(f"Transcripción leída: {num_palabras_total} palabras (~{estimacion_tokens_transcripcion_total} tokens estimados).")
@@ -38,37 +38,37 @@ def main():
     # --- INICIO: SECCIÓN A MODIFICAR PARA CARGAR ESQUEMA EXISTENTE ---
     # Comentamos toda la lógica de generación de esquema
     
-    # print("\n--- Fase de Generación de Esquema ---") # Comentado
-    # if estimacion_tokens_transcripcion_total <= max_tokens_contenido_chunk:
-    #     print(f"\nINFO: La transcripción ({estimacion_tokens_transcripcion_total} tokens est.) parece caber en un solo pase para el esquema.")
-    #     esquema_final = llm_processing.generar_esquema_de_texto(texto_completo, es_parcial=False)
-    # else:
-    #     print(f"\nINFO: La transcripción ({estimacion_tokens_transcripcion_total} tokens est.) excede el límite por chunk para el esquema. Se procederá con mega-chunking.")
-    #     mega_chunks = utils.dividir_en_mega_chunks(
-    #         texto_completo, 
-    #         max_tokens_contenido_chunk, 
-    #         config.MEGA_CHUNK_OVERLAP_WORDS
-    #     )
-    #     print(f"Transcripción dividida en {len(mega_chunks)} mega-chunks para la generación de esquemas parciales.")
-    #     esquemas_parciales = []
-    #     for i, mega_chunk in enumerate(mega_chunks):
-    #         esquema_parcial = llm_processing.generar_esquema_de_texto(
-    #             mega_chunk, 
-    #             es_parcial=True,
-    #             chunk_num=i + 1,
-    #             total_chunks=len(mega_chunks)
-    #         )
-    #         if esquema_parcial:
-    #             esquemas_parciales.append(esquema_parcial)
-    #         else:
-    #             print(f"ADVERTENCIA ADICIONAL en main: No se generó esquema para el mega-chunk {i+1}.")
+    print("\n--- Fase de Generación de Esquema ---") # Comentado
+    if estimacion_tokens_transcripcion_total <= max_tokens_contenido_chunk:
+        print(f"\nINFO: La transcripción ({estimacion_tokens_transcripcion_total} tokens est.) parece caber en un solo pase para el esquema.")
+        esquema_final = llm_processing.generar_esquema_de_texto(texto_completo, es_parcial=False)
+    else:
+        print(f"\nINFO: La transcripción ({estimacion_tokens_transcripcion_total} tokens est.) excede el límite por chunk para el esquema. Se procederá con mega-chunking.")
+        mega_chunks = utils.dividir_en_mega_chunks(
+            texto_completo, 
+            max_tokens_contenido_chunk, 
+            config.MEGA_CHUNK_OVERLAP_WORDS
+        )
+        print(f"Transcripción dividida en {len(mega_chunks)} mega-chunks para la generación de esquemas parciales.")
+        esquemas_parciales = []
+        for i, mega_chunk in enumerate(mega_chunks):
+            esquema_parcial = llm_processing.generar_esquema_de_texto(
+                mega_chunk, 
+                es_parcial=True,
+                chunk_num=i + 1,
+                total_chunks=len(mega_chunks)
+            )
+            if esquema_parcial:
+                esquemas_parciales.append(esquema_parcial)
+            else:
+                print(f"ADVERTENCIA ADICIONAL en main: No se generó esquema para el mega-chunk {i+1}.")
         
-    #     if not esquemas_parciales:
-    #         print("ERROR CRÍTICO: No se pudieron generar esquemas parciales válidos. No se puede continuar a la fusión ni a la generación de apuntes.")
-    #         return
-    #     esquema_final = llm_processing.fusionar_esquemas(esquemas_parciales)
+        if not esquemas_parciales:
+            print("ERROR CRÍTICO: No se pudieron generar esquemas parciales válidos. No se puede continuar a la fusión ni a la generación de apuntes.")
+            return
+        esquema_final = llm_processing.fusionar_esquemas(esquemas_parciales)
 
-    # utils.guardar_texto_a_archivo(esquema_final, config.OUTPUT_ESQUEMA_PATH, "esquema de la clase") # Comentado
+    utils.guardar_texto_a_archivo(esquema_final, config.OUTPUT_ESQUEMA_PATH, "esquema de la clase")
     
     # --- NUEVO: Cargar esquema existente ---
     print(f"\nINFO: Intentando cargar esquema existente desde: {config.OUTPUT_ESQUEMA_PATH}")
