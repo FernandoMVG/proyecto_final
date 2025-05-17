@@ -171,7 +171,8 @@ def generar_apuntes_por_seccion_con_rag(seccion_esquema, num_seccion=None):
     # Tomar la primera línea del sub-esquema como consulta para la BD vectorial
     # O podrías tomar todo el texto de seccion_esquema si es corto y descriptivo
     lineas_seccion_esquema = seccion_esquema.strip().split('\n')
-    consulta_para_bd = lineas_seccion_esquema[0] if lineas_seccion_esquema else seccion_esquema
+    # consulta_para_bd = lineas_seccion_esquema[0] if lineas_seccion_esquema else seccion_esquema
+    consulta_para_bd = seccion_esquema.strip()  # Usar todo el texto de la sección como consulta    
 
     # Si num_seccion está disponible, usarlo en el print
     titulo_print_seccion = f"Sección del Esquema (Consulta: '{consulta_para_bd[:60]}...')"
