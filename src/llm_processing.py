@@ -5,6 +5,7 @@ import time
 import re
 from src import config  # Importa configuraciones
 from src import prompts # Importa plantillas de prompts
+from src import vector_db_client
 
 # --- Carga del Modelo LLM ---
 llm_instance = None
@@ -155,64 +156,79 @@ def fusionar_esquemas(lista_esquemas_parciales):
         print(f"ERROR durante la fusión de esquemas con LLM: {e}")
         return None
     
-def generar_apuntes_desde_esquema(texto_completo, esquema_clase):
+def generar_apuntes_por_seccion_con_rag(seccion_esquema, num_seccion=None):
     """
-    Genera apuntes detallados en Markdown usando la transcripción completa y un esquema.
+    Genera apuntes para una sección específica del esquema, usando chunks relevantes
+    de la transcripción obtenidos de la API de la BD vectorial.
     """
     if llm_instance is None:
-        print("ERROR: Modelo LLM no cargado en generar_apuntes_desde_esquema.")
+        print("ERROR: Modelo LLM no cargado en generar_apuntes_por_seccion_con_rag.")
         return None
-    if not texto_completo or not esquema_clase:
-        print("ERROR: Se requiere la transcripción completa y el esquema de la clase para generar apuntes.")
-        return None
+    if not seccion_esquema:
+        print("ERROR: La sección del esquema está vacía.")
+        return "" # Devolver string vacío para no romper la concatenación
 
-    print("\n--- Iniciando Generación de Apuntes Detallados ---")
+    # Tomar la primera línea del sub-esquema como consulta para la BD vectorial
+    # O podrías tomar todo el texto de seccion_esquema si es corto y descriptivo
+    lineas_seccion_esquema = seccion_esquema.strip().split('\n')
+    consulta_para_bd = lineas_seccion_esquema[0] if lineas_seccion_esquema else seccion_esquema
+
+    # Si num_seccion está disponible, usarlo en el print
+    titulo_print_seccion = f"Sección del Esquema (Consulta: '{consulta_para_bd[:60]}...')"
+    if num_seccion:
+        titulo_print_seccion = f"Sección {num_seccion} del Esquema (Consulta: '{consulta_para_bd[:60]}...')"
     
+    print(f"\n--- Iniciando Generación de Apuntes para: {titulo_print_seccion} ---")
+
+    print("    Obteniendo contexto relevante de la BD vectorial...")
+    chunks_contexto_relevante = vector_db_client.obtener_contexto_relevante_de_api(consulta_para_bd)
+
+    if not chunks_contexto_relevante:
+        print(f"    ADVERTENCIA: No se encontraron chunks de contexto relevantes en la BD vectorial para '{consulta_para_bd[:60]}...'. "
+              "Los apuntes para esta sección podrían ser menos detallados o basados solo en el esquema.")
+        # Podríamos decidir pasar un string vacío o un mensaje indicando que no hay contexto
+        contexto_para_prompt = "No se encontró contexto adicional en la transcripción para esta sección específica."
+    else:
+        contexto_para_prompt = "\n\n".join(chunks_contexto_relevante)
+        print(f"    Contexto obtenido: {len(chunks_contexto_relevante)} chunks, ~{len(contexto_para_prompt.split())} palabras.")
+
     prompt_final_apuntes = prompts.PROMPT_GENERAR_APUNTES_TEMPLATE.format(
-        esquema_clase=esquema_clase,
-        texto_completo=texto_completo
+        seccion_del_esquema_actual=seccion_esquema, # seccion_esquema es el sub-esquema
+        contexto_relevante_de_transcripcion=contexto_para_prompt # contexto_para_prompt son los chunks de la BD
     )
 
-    # Estimación de tokens para el prompt de apuntes (puede ser muy grande)
     estimacion_tokens_prompt_apuntes = len(prompt_final_apuntes.split()) * config.FACTOR_PALABRAS_A_TOKENS_APROX
-    if estimacion_tokens_prompt_apuntes > config.CONTEXT_SIZE * 0.9: # Dejar 10% para la respuesta
-        print(f"ADVERTENCIA MUY SERIA: El prompt para generar apuntes ({estimacion_tokens_prompt_apuntes:.0f} tokens est.) "
-              f"es demasiado largo para el CONTEXT_SIZE ({config.CONTEXT_SIZE}). Los apuntes podrían ser muy incompletos o fallar.")
-        # Considerar estrategias más avanzadas si esto ocurre (ej. generar apuntes por sección del esquema)
+    if estimacion_tokens_prompt_apuntes > config.CONTEXT_SIZE * 0.9:
+        print(f"    ADVERTENCIA MUY SERIA: El prompt para esta sección ({estimacion_tokens_prompt_apuntes:.0f} tokens est.) "
+              f"es demasiado largo para el CONTEXT_SIZE ({config.CONTEXT_SIZE}). Los apuntes podrían ser incompletos o fallar.")
 
-    print(f"Enviando transcripción y esquema al LLM para generar apuntes (max_tokens: {config.MAX_TOKENS_APUNTES})... Esto puede tardar MUCHO tiempo.")
+    print(f"    Enviando datos al LLM para apuntes de la sección (max_tokens: {config.MAX_TOKENS_APUNTES_POR_SECCION})...")
     start_time = time.time()
     try:
         output = llm_instance(
             prompt_final_apuntes,
-            max_tokens=config.MAX_TOKENS_APUNTES, # Necesitará muchos tokens para la salida
+            max_tokens=config.MAX_TOKENS_APUNTES_POR_SECCION,
             stop=None, 
             echo=False,
-            temperature=config.LLM_TEMPERATURE_APUNTES # Temperatura para los apuntes
+            temperature=config.LLM_TEMPERATURE_APUNTES
         )
         
-        apuntes_generados = ""
+        apuntes_seccion = ""
         finish_reason = "desconocido"
-
         if output and 'choices' in output and len(output['choices']) > 0:
-            apuntes_generados = output['choices'][0]['text'].strip()
+            apuntes_seccion = output['choices'][0]['text'].strip()
             finish_reason = output['choices'][0].get('finish_reason', 'desconocido')
         else:
-            print(f"ADVERTENCIA: La salida del LLM para los apuntes fue inesperada o vacía.")
-            return None
+            print(f"    ADVERTENCIA: Salida vacía del LLM para apuntes de la sección.")
+            return ""
 
         end_time = time.time()
-        minutos_apuntes = (end_time - start_time) / 60
-        print(f"--- Apuntes detallados generados en {end_time - start_time:.2f} segundos --- Minutos aproximados: {minutos_apuntes:.2f} (Finish Reason: {finish_reason}) ---")
+        print(f"--- Apuntes para la sección generados en {end_time - start_time:.2f} seg. (Finish Reason: {finish_reason}) ---")
 
         if finish_reason == 'length':
-            print(f"    ¡¡¡ADVERTENCIA DE CORTE!!! La generación de apuntes se detuvo porque alcanzó el límite de max_tokens ({config.MAX_TOKENS_APUNTES}).")
-            print(f"    Últimos 100 caracteres generados: '...{apuntes_generados[-100:]}'")
-        elif finish_reason not in ['stop', 'eos_token', 'desconocido']:
-             print(f"    ADVERTENCIA: Razón de finalización inusual para los apuntes: {finish_reason}")
+            print(f"    ¡¡¡CORTE!!! Apuntes de sección se cortaron (max_tokens: {config.MAX_TOKENS_APUNTES_POR_SECCION}).")
         
-        return apuntes_generados
-
+        return apuntes_seccion
     except Exception as e:
-        print(f"ERROR durante la generación de apuntes con LLM: {e}")
-        return None    
+        print(f"ERROR durante la generación de apuntes para la sección: {e}")
+        return ""

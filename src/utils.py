@@ -47,38 +47,43 @@ def crear_directorios_necesarios():
 
 def dividir_en_mega_chunks(texto_completo, max_tokens_por_chunk_contenido, overlap_palabras):
     """
-    Divide el texto en mega-chunks, donde cada chunk (sin contar el prompt)
-    intenta no exceder max_tokens_por_chunk_contenido.
-    Devuelve una lista de strings (los mega-chunks).
+    Divide el texto en mega-chunks para la generación del esquema.
     """
     palabras = texto_completo.split()
     if not palabras:
         return []
-
     mega_chunks = []
     indice_actual_palabra = 0
+    palabras_por_chunk_objetivo = int(max_tokens_por_chunk_contenido / config.FACTOR_PALABRAS_A_TOKENS_APROX)
+    if palabras_por_chunk_objetivo <= overlap_palabras:
+        palabras_por_chunk_objetivo = overlap_palabras + 100
+        print(f"ADVERTENCIA (mega-chunks): max_tokens_por_chunk_contenido es muy bajo. Ajustando palabras_por_chunk_objetivo a {palabras_por_chunk_objetivo}")
     
-    # Estimación muy burda de tokens por palabra para el chunking
-    # Ajustar este factor si es necesario tras observar el comportamiento
-    # Es mejor ser conservador (factor más alto) para no exceder el límite
-    FACTOR_PALABRAS_A_TOKENS_APROX = 1.7 
-
-    # Cuántas palabras podemos meter en un chunk para no pasarnos de tokens
-    palabras_por_chunk_objetivo = int(max_tokens_por_chunk_contenido / FACTOR_PALABRAS_A_TOKENS_APROX)
-    if palabras_por_chunk_objetivo <= overlap_palabras: # Asegurar que el chunk sea más grande que el overlap
-        palabras_por_chunk_objetivo = overlap_palabras + 100 # Un mínimo razonable
-        print(f"ADVERTENCIA: max_tokens_por_chunk_contenido es muy bajo. Ajustando palabras_por_chunk_objetivo a {palabras_por_chunk_objetivo}")
-
-    print(f"INFO: Intentando crear mega-chunks de aprox. {palabras_por_chunk_objetivo} palabras.")
-
+    print(f"INFO (mega-chunks): Intentando crear mega-chunks de aprox. {palabras_por_chunk_objetivo} palabras.")
     while indice_actual_palabra < len(palabras):
         inicio_chunk = indice_actual_palabra
         fin_chunk = min(indice_actual_palabra + palabras_por_chunk_objetivo, len(palabras))
-        
         chunk_palabras = palabras[inicio_chunk:fin_chunk]
         mega_chunks.append(" ".join(chunk_palabras))
-        
         avance = max(1, palabras_por_chunk_objetivo - overlap_palabras)
         indice_actual_palabra += avance
-        
     return mega_chunks
+
+def dividir_texto_para_bd_vectorial(texto_completo, tamano_chunk_palabras, superposicion_palabras):
+    """Divide el texto en chunks más pequeños para poblar la BD vectorial."""
+    palabras = texto_completo.split()
+    if not palabras:
+        return []
+    
+    chunks_bd = []
+    indice_actual = 0
+    while indice_actual < len(palabras):
+        inicio_chunk = indice_actual
+        fin_chunk = min(indice_actual + tamano_chunk_palabras, len(palabras))
+        chunk_palabras_bd = palabras[inicio_chunk:fin_chunk]
+        chunks_bd.append(" ".join(chunk_palabras_bd))
+        
+        avance = max(1, tamano_chunk_palabras - superposicion_palabras) 
+        indice_actual += avance
+        
+    return chunks_bd
