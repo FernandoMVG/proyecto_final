@@ -1,5 +1,7 @@
 # Proyecto Final - Transcripción y Guía de Estudio con LLM
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/FernandoMVG/proyecto_final)
+
 Este proyecto utiliza un Modelo de Lenguaje Grande (LLM) local para procesar transcripciones de clases de Optimización, dividiéndolas en partes (Map) y luego sintetizando una guía de estudio en formato Markdown (Reduce).
 
 ## Prerrequisitos del Sistema
