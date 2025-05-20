@@ -122,17 +122,20 @@ def main():
 
     if not secciones_del_esquema:
         print("ADVERTENCIA: No se pudieron identificar secciones principales en el esquema. Se intentará generar apuntes para el esquema completo como una sola sección (puede ser menos efectivo).")
-        # Podríamos pasar un string vacío como sección_esquema para que el LLM use toda la transcripción (contexto relevante)
-        # O, mejor, usar el esquema completo como la "sección" a desarrollar
         apuntes_para_esta_seccion = llm_processing.generar_apuntes_por_seccion_con_rag(
-            esquema_final_texto, # Usar el esquema completo como la "sección"
-            num_seccion=1 # Indicar que es la única sección
+            esquema_final_texto, 
+            num_seccion=1 
         )
         if apuntes_para_esta_seccion:
             apuntes_completos_concatenados += f"## Resumen General de la Clase\n{apuntes_para_esta_seccion}\n\n"
     else:
         print(f"Esquema dividido en {len(secciones_del_esquema)} secciones principales para procesar.")
         for i, seccion_esq in enumerate(secciones_del_esquema):
+            # --- AÑADE ESTOS PRINTS DE DEPURACIÓN AQUÍ ---
+            print(f"\nDEBUG MAIN: Procesando para Apuntes - Sección del Esquema {i+1}/{len(secciones_del_esquema)}")
+            print(f"DEBUG MAIN: Contenido de la 'seccion_esq' que se pasará a generar_apuntes_por_seccion_con_rag:\n'''\n{seccion_esq}\n'''")
+            # --- FIN DE PRINTS DE DEPURACIÓN ---
+
             apuntes_para_esta_seccion = llm_processing.generar_apuntes_por_seccion_con_rag(
                 seccion_esq, 
                 num_seccion=i+1
@@ -141,16 +144,21 @@ def main():
                 match_titulo_seccion = re.match(r"(\d+\..*?)(?:\n|$)", seccion_esq)
                 if match_titulo_seccion:
                     apuntes_completos_concatenados += f"## {match_titulo_seccion.group(1)}\n{apuntes_para_esta_seccion}\n\n"
-                else: # Si no puede extraer un título numerado, solo pega el contenido
-                    apuntes_completos_concatenados += f"### Sección Adicional\n{apuntes_para_esta_seccion}\n\n" # Encabezado genérico
+                else: 
+                    # Si no coincide el patrón de título numerado (ej. si es el esquema completo como una sola sección)
+                    # o si una sección del esquema no empieza con "X. YYY"
+                    # Podríamos usar un encabezado más genérico o intentar extraer el primer título de otra forma.
+                    # Por ahora, si no hay título numerado, usamos un encabezado genérico para la sección.
+                    primer_linea_seccion = seccion_esq.split('\n')[0].strip()
+                    apuntes_completos_concatenados += f"## {primer_linea_seccion if primer_linea_seccion else f'Sección Detallada {i+1}'}\n{apuntes_para_esta_seccion}\n\n"
             else:
-                print(f"ADVERTENCIA: No se generaron apuntes para la sección del esquema: {seccion_esq.splitlines()[0] if seccion_esq else 'Sección vacía'}")
+                print(f"ADVERTENCIA: No se generaron apuntes para la sección del esquema: {seccion_esq.splitlines()[0] if seccion_esq else 'Sección vacía del esquema'}")
 
     utils.guardar_texto_a_archivo(apuntes_completos_concatenados.strip(), config.OUTPUT_APUNTES_PATH, "apuntes detallados de la clase")
-    print(f"--- Fin Fase de Generación de Apuntes Detallados (Duración Total de Fase: {format_duration(time.time() - fase_start_time)}) ---")
+    print(f"--- Fin Fase de Generación de Apuntes Detallados (Duración Total de Fase: {utils.format_duration(time.time() - fase_start_time)}) ---") # Usando tu función format_duration
     
     print("\n--- Proceso Completo Terminado ---")
-    print(f"--- Duración Total del Script: {format_duration(time.time() - script_start_time)} ---")
+    print(f"--- Duración Total del Script: {utils.format_duration(time.time() - script_start_time)} ---") # Usando tu función format_duration
 
 if __name__ == "__main__":
     main()

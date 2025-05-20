@@ -183,6 +183,7 @@ def generar_apuntes_por_seccion_con_rag(seccion_esquema, num_seccion=None):
 
     print("    Obteniendo contexto relevante de la BD vectorial...")
     chunks_contexto_relevante = vector_db_client.obtener_contexto_relevante_de_api(consulta_para_bd)
+    print(f"    Contexto relevante obtenido: {chunks_contexto_relevante}")
 
     if not chunks_contexto_relevante:
         print(f"    ADVERTENCIA: No se encontraron chunks de contexto relevantes en la BD vectorial para '{consulta_para_bd[:60]}...'. "

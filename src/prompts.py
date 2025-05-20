@@ -46,38 +46,53 @@ PROMPT_FUSIONAR_ESQUEMAS_TEMPLATE = """Eres un editor experto y organizador de c
 ESQUEMA MAESTRO FUSIONADO Y COMPLETO (comienza con 1.):
 """
 # Este prompt es para generar apuntes de clase detallados en Markdown
-PROMPT_GENERAR_APUNTES_TEMPLATE = """Eres un asistente experto en redacción académica y creación de material de estudio. Tu tarea es generar apuntes de clase detallados y bien estructurados en formato Markdown.
-Utilizarás dos fuentes principales:
-1.  Los FRAGMENTOS RELEVANTES DE LA TRANSCRIPCIÓN de la clase.
-2.  Una SECCIÓN ESPECÍFICA DEL ESQUEMA JERÁRQUICO de la clase. (que fue generado previamente a partir de la transcripción).
+PROMPT_GENERAR_APUNTES_TEMPLATE = """Eres un asistente experto en redacción académica y creación de material de estudio. Tu tarea es generar apuntes de clase DETALLADOS y BIEN ESTRUCTURADOS en formato Markdown para UNA SECCIÓN ESPECÍFICA del esquema de una clase.
+Utilizarás dos fuentes principales de información:
+1.  La SECCIÓN DEL ESQUEMA proporcionada, que indica los temas y subtemas a cubrir.
+2.  Los FRAGMENTOS RELEVANTES DE LA TRANSCRIPCIÓN, que contienen el contenido de la clase relacionado con esta sección del esquema.
 
---- OBJETIVO ---
-Redactar apuntes completos y claros, como si fueran para un estudiante que necesita entender a fondo la materia de la clase. Los apuntes deben seguir la estructura del ESQUEMA proporcionado utilizando como fuente principal los FRAGMENTOS RELEVANTES DE LA TRANSCRIPCIÓN.
+--- OBJETIVO PRINCIPAL ---
+Redactar apuntes COMPLETOS, CLAROS y PEDAGÓGICOS para la SECCIÓN DEL ESQUEMA dada, basándote FIRMEMENTE en la información contenida en los FRAGMENTOS RELEVANTES DE LA TRANSCRIPCIÓN. El objetivo es que un estudiante pueda entender a fondo los puntos de esta sección del esquema.
 
 --- INSTRUCCIONES DETALLADAS ---
-1.  **Sigue el Esquema:** Utiliza el SECCIÓN DEL ESQUEMA como la estructura principal de tus apuntes. Cada punto y subpunto del esquema debe convertirse en una sección o subsección en tus apuntes (usando encabezados Markdown apropiados: #, ##, ###, etc., correspondientes a la jerarquía del esquema).
-2.  **Extrae de los Fragmentos de Transcripción:** Para CADA PUNTO de la SECCIÓN DEL ESQUEMA, localiza la información relevante en los FRAGMENTOS RELEVANTES DE LA TRANSCRIPCIÓN y utilízala para redactar una explicación clara y detallada. No te limites a copiar fragmentos; reelabora y sintetiza la información.
-3.  **Profundidad y Claridad:**
-    *   Define los conceptos clave mencionados en el esquema.
-    *   Explica los procesos o métodos descritos.
-    *   Si el esquema menciona ejemplos, incorpóralos en tu redacción.
-    *   Asegúrate de que las explicaciones sean comprensibles y pedagógicas.
-4.  **Formato Markdown:**
-    *   Usa encabezados para los títulos de temas y subtemas según el esquema.
-    *   Utiliza listas con viñetas (`-` o `*`) para enumeraciones o puntos clave dentro de una explicación.
-    *   Usa **negrita** para resaltar términos importantes.
-    *   Si hay fórmulas o código simple mencionado, intenta representarlo de la mejor manera posible en Markdown (ej. usando bloques de código ` ``` ` o comillas invertidas para `código inline`).
-5.  **Fluidez y Coherencia:** Asegúrate de que los apuntes fluyan bien de una sección a otra y que el lenguaje sea académico y preciso.
-6.  **Omite Contenido Irrelevante:** Aunque los FRAGMENTOS RELEVANTES DE LA TRANSCRIPCIÓN se proporcionan como referencia, céntrate en desarrollar los puntos del ESQUEMA. Evita incluir información de la transcripción que no esté directamente relacionada con los temas del esquema.
-7.  **Extensión:** Sé lo suficientemente detallado para que los apuntes sean útiles, pero evita la palabrería innecesaria. La longitud de cada sección dependerá de la cantidad de información relevante en la transcripción para ese punto del esquema.
+1.  **ESTRUCTURA BASADA EN EL ESQUEMA:**
+    *   Toma la "SECCIÓN DEL ESQUEMA A DESARROLLAR" como la guía absoluta para la estructura de tus apuntes.
+    *   El primer punto/título de la "SECCIÓN DEL ESQUEMA" debe ser el encabezado Markdown principal para esta sección de apuntes (ej., si el esquema dice "2. Preparación de Datos", tu apunte comenzará con `## 2. Preparación de Datos`).
+    *   Los subpuntos dentro de la "SECCIÓN DEL ESQUEMA" deben desarrollarse como sub-encabezados Markdown (`###`, `####`) o, si son detalles más pequeños, como parte de la explicación o en listas con viñetas. Mantén la jerarquía del esquema.
 
---- ESQUEMA DETALLADO DE LA CLASE (Guía para la estructura) ---
-{seccion_del_esquema_actual} 
---- FIN ESQUEMA DETALLADO ---
+2.  **ELABORACIÓN PROFUNDA DESDE LOS FRAGMENTOS DE TRANSCRIPCIÓN:**
+    *   Para CADA PUNTO Y SUBPUNTO de la "SECCIÓN DEL ESQUEMA", busca la información correspondiente DENTRO de los "FRAGMENTOS RELEVANTES DE LA TRANSCRIPCIÓN".
+    *   SINTETIZA y REELABORA esta información para construir una explicación detallada. NO te limites a copiar o parafrasear superficialmente. DEFINE conceptos, EXPLICA procesos, DESARROLLA ejemplos mencionados.
+    *   Tu objetivo es transformar la información de los fragmentos en apuntes comprensibles y bien redactados.
+
+3.  **MANEJO DE INFORMACIÓN ESCASA:**
+    *   Si para un punto específico del esquema, los "FRAGMENTOS RELEVANTES DE LA TRANSCRIPCIÓN" NO contienen información suficiente, clara o directa para desarrollar una explicación detallada, DEBES indicarlo explícitamente. Escribe una frase concisa como: "(No se encontró información detallada en el contexto proporcionado para este punto específico del esquema)".
+    *   NO INVENTES información que no esté respaldada por los fragmentos. NO uses placeholders genéricos como "(Aquí va la explicación...)". Es preferible indicar la falta de información a generar contenido incorrecto o de relleno.
+
+4.  **FORMATO MARKDOWN CUIDADOSO:**
+    *   Utiliza encabezados (`##`, `###`, `####`) consistentemente según la jerarquía del esquema.
+    *   Usa listas con viñetas (`-` o `*`) para enumeraciones o puntos clave.
+    *   Usa **negrita** para resaltar términos importantes o títulos de conceptos dentro de un párrafo.
+    *   Representa fórmulas o código simple de la mejor manera posible (bloques ` ``` ` o `código inline`).
+
+5.  **CALIDAD DE LA REDACCIÓN:**
+    *   Asegura la fluidez y coherencia entre las explicaciones de los diferentes puntos.
+    *   Utiliza un lenguaje académico, claro y preciso.
+
+6.  **ENFOQUE Y RELEVANCIA:**
+    *   Céntrate EXCLUSIVAMENTE en desarrollar los puntos de la "SECCIÓN DEL ESQUEMA A DESARROLLAR" utilizando los "FRAGMENTOS RELEVANTES DE LA TRANSCRIPCIÓN".
+    *   Evita incluir información de los fragmentos que no esté directamente relacionada con la sección actual del esquema.
+
+7.  **EXTENSIÓN ADECUADA:**
+    *   Sé lo suficientemente detallado para que los apuntes sean útiles. La longitud de la explicación para cada punto dependerá de la riqueza de la información en los "FRAGMENTOS RELEVANTES".
+
+--- SECCIÓN DEL ESQUEMA A DESARROLLAR ---
+{seccion_del_esquema_actual}
+--- FIN SECCIÓN DEL ESQUEMA ---
 
 --- FRAGMENTOS RELEVANTES DE LA TRANSCRIPCIÓN (Contexto para esta sección) ---
 {contexto_relevante_de_transcripcion}
 --- FIN FRAGMENTOS RELEVANTES DE LA TRANSCRIPCIÓN ---
 
-Apuntes de Clase Detallados en Markdown (comienza con el primer encabezado basado en el esquema):
+Apuntes Detallados en Markdown para la SECCIÓN DEL ESQUEMA (comienza directamente con el primer encabezado basado en la "SECCIÓN DEL ESQUEMA A DESARROLLAR"):
 """
