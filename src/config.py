@@ -6,7 +6,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_PROJECT_DIR = os.path.join(SCRIPT_DIR, "..")
 
 # --- Configuración del Modelo y Rutas ---
-MODEL_FILENAME = "mistral-7b-instruct-v0.2.Q4_K_M.gguf" # gemma-3-1b-pt-f16.gguf
+MODEL_FILENAME = "mistral-7b-instruct-v0.2.Q2_K.gguf" 
 MODEL_PATH = os.path.join(BASE_PROJECT_DIR, "models", MODEL_FILENAME)
 INPUT_FILE_NAME = "transcripcion_ejemplo.txt"
 INPUT_FILE_PATH = os.path.join(BASE_PROJECT_DIR, "data", INPUT_FILE_NAME)
