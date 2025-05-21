@@ -17,9 +17,8 @@ TEMPLATE_TRANSCRIPCION_PATH = os.path.join(BASE_PROJECT_DIR, "templates", TEMPLA
 
 # --- Configuración del LLM ---
 CONTEXT_SIZE = 8192 #16384
-MAX_TOKENS_ESQUEMA_PARCIAL = 512
+MAX_TOKENS_ESQUEMA_PARCIAL = 1024
 MAX_TOKENS_ESQUEMA_FUSIONADO = 2048
-MAX_TOKENS_APUNTES_POR_SECCION = 2048 # Tokens para la *salida* de apuntes de una sección
 N_GPU_LAYERS = -1  # -1 para cargar todas las capas posibles en GPU
 N_THREADS = None     # None para que Llama.cpp decida (usualmente óptimo)
 LLM_VERBOSE = False
@@ -29,5 +28,4 @@ N_BATCH_LLAMA = 1024 # o 512. Asegurar que esté definido.
 
 # --- Configuración del Mega-Chunking (para generación de esquema si es necesario) ---
 MEGA_CHUNK_CONTEXT_FACTOR = 0.7
-MEGA_CHUNK_OVERLAP_WORDS = 50
-FACTOR_PALABRAS_A_TOKENS_APROX = 1.7 # Estimación conservadora (puede ser 1.3-1.5 para inglés, español un poco más)
+MEGA_CHUNK_OVERLAP_WORDS = 0

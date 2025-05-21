@@ -5,26 +5,22 @@ import logging # <--- Importar logging
 from src import config
 from src import utils
 from src import llm_processing
-# from src import prompts # prompts es usado por llm_processing
+from src import prompts # prompts es usado por llm_processing
 
 # --- Configuración del Logging ---
-# Definir esto a nivel de módulo para que esté disponible inmediatamente.
-# Ajustar el formato y el nivel según sea necesario.
-LOG_LEVEL = logging.INFO # Cambiar a logging.DEBUG para más detalle
-# LOG_LEVEL = logging.DEBUG # Descomentar para ver logs de DEBUG
+LOG_LEVEL = logging.INFO
+# LOG_LEVEL = logging.DEBUG # Descomentar para más detalle
 
-log_format = "%(asctime)s [%(levelname)-8s] %(name)-25s %(funcName)-25s L%(lineno)-4d: %(message)s"
+log_format = "%(asctime)s [%(levelname)-5s] %(name)-20s %(funcName)-25s L%(lineno)-4d: %(message)s"
 logging.basicConfig(
     level=LOG_LEVEL,
     format=log_format,
     handlers=[
-        logging.StreamHandler() # Salida a consola
-        # Descomentar para añadir logging a un archivo:
+        logging.StreamHandler()
         # logging.FileHandler(os.path.join(config.BASE_PROJECT_DIR, "output", "schema_generator.log"), mode='a', encoding='utf-8')
     ]
 )
-# Crear un logger específico para este módulo
-module_logger = logging.getLogger(__name__) # Se resolverá a '__main__' cuando se ejecute directamente
+module_logger = logging.getLogger(__name__)
 
 def main():
     script_start_time = time.time()
@@ -32,9 +28,10 @@ def main():
 
     with utils.timed_phase("Inicialización y Carga de Modelo"):
         utils.crear_directorios_necesarios()
-        llm = llm_processing.cargar_modelo_llm()
-        if llm is None:
-            module_logger.critical("No se pudo cargar el modelo LLM. Saliendo.")
+        # La función cargar_modelo_llm ahora asigna a llm_processing.llm_instance
+        llm_processing.cargar_modelo_llm() 
+        if llm_processing.llm_instance is None:
+            module_logger.critical("No se pudo cargar el modelo LLM o la instancia no está disponible. Saliendo.")
             return
 
     texto_completo_transcripcion = ""
@@ -44,38 +41,71 @@ def main():
             module_logger.critical("No se pudo leer el archivo de transcripción. Saliendo.")
             return
         
-        num_palabras_total = len(texto_completo_transcripcion.split())
-        factor_conversion = config.FACTOR_PALABRAS_A_TOKENS_APROX if config.FACTOR_PALABRAS_A_TOKENS_APROX > 0 else 1.5
-        estimacion_tokens_transcripcion_total = int(num_palabras_total / factor_conversion)
-        module_logger.info(f"Transcripción leída: {num_palabras_total} palabras (~{estimacion_tokens_transcripcion_total} tokens estimados).")
+        num_palabras_total_leidas = len(texto_completo_transcripcion.split())
+        # Eliminado el log de tokens estimados por factor, ya que ahora usamos conteo real.
+        module_logger.info(f"Transcripción leída: {num_palabras_total_leidas} palabras.")
+
+
+    num_tokens_prompt_base = 0
+    num_tokens_contenido_transcripcion = 0
+
+    with utils.timed_phase("Análisis de Tokens para Decisión de Procesamiento"):
+        prompt_template_base_texto = prompts.PROMPT_GENERAR_ESQUEMA_TEMPLATE.replace("{texto_completo}", "")
+        try:
+            tokens_prompt_base = llm_processing.llm_instance.tokenize(prompt_template_base_texto.encode('utf-8', 'ignore'))
+            num_tokens_prompt_base = len(tokens_prompt_base)
+            module_logger.info(f"Tokens reales del prompt base (sin contenido): {num_tokens_prompt_base}")
+        except Exception as e:
+            module_logger.critical(f"Error CRÍTICO al tokenizar el prompt base: {e}. No se puede continuar.", exc_info=True)
+            return # Terminar si no podemos obtener este conteo esencial
+
+        try:
+            tokens_contenido_transcripcion = llm_processing.llm_instance.tokenize(texto_completo_transcripcion.encode('utf-8', 'ignore'))
+            num_tokens_contenido_transcripcion = len(tokens_contenido_transcripcion)
+            module_logger.info(f"Tokens reales del contenido de la transcripción: {num_tokens_contenido_transcripcion}")
+        except Exception as e:
+            module_logger.critical(f"Error CRÍTICO al tokenizar el contenido de la transcripción: {e}. No se puede continuar.", exc_info=True)
+            return # Terminar si no podemos obtener este conteo esencial
+
 
     esquema_final_texto = None
-    # --- MODIFICACIÓN AQUÍ: Eliminada la carga de esquema existente ---
     with utils.timed_phase("Generación de Esquema Jerárquico"):
-        module_logger.info("Procediendo a generar nuevo esquema.") # Mensaje directo
+        module_logger.info("Procediendo a generar nuevo esquema.")
             
-        tokens_prompt_base_esquema_aprox = 200 
-        max_tokens_para_texto_en_mega_chunk = int(
-            (config.CONTEXT_SIZE * config.MEGA_CHUNK_CONTEXT_FACTOR) - tokens_prompt_base_esquema_aprox - config.MAX_TOKENS_ESQUEMA_PARCIAL
+        tokens_salida_pase_unico = config.MAX_TOKENS_ESQUEMA_FUSIONADO
+        max_tokens_para_contenido_en_pase_unico = int(
+            (config.CONTEXT_SIZE * config.MEGA_CHUNK_CONTEXT_FACTOR) - num_tokens_prompt_base - tokens_salida_pase_unico
         )
 
-        if max_tokens_para_texto_en_mega_chunk <=0:
-            module_logger.critical(f"max_tokens_para_texto_en_mega_chunk ({max_tokens_para_texto_en_mega_chunk}) no es positivo. "
-                                   "Verifica CONTEXT_SIZE, MEGA_CHUNK_CONTEXT_FACTOR, y estimaciones. No se puede proceder.")
+        max_tokens_para_contenido_en_mega_chunk_individual = int(
+             (config.CONTEXT_SIZE * config.MEGA_CHUNK_CONTEXT_FACTOR) - num_tokens_prompt_base - config.MAX_TOKENS_ESQUEMA_PARCIAL
+        )
+
+        if max_tokens_para_contenido_en_pase_unico <=0 or max_tokens_para_contenido_en_mega_chunk_individual <= 0:
+            module_logger.critical(f"Cálculo de tokens para contenido resultó no positivo. "
+                                   f"Pase único: {max_tokens_para_contenido_en_pase_unico}, "
+                                   f"Chunk individual: {max_tokens_para_contenido_en_mega_chunk_individual}. "
+                                   "Verifica CONTEXT_SIZE, factores y max_tokens de salida.")
             return
 
-        if estimacion_tokens_transcripcion_total <= max_tokens_para_texto_en_mega_chunk:
-            module_logger.info(f"La transcripción ({estimacion_tokens_transcripcion_total} tokens est.) "
-                               f"cabe en un solo pase para el esquema (max_tokens_texto_permitido: {max_tokens_para_texto_en_mega_chunk}).")
+        if num_tokens_contenido_transcripcion <= max_tokens_para_contenido_en_pase_unico:
+            module_logger.info(f"La transcripción ({num_tokens_contenido_transcripcion} tokens reales de contenido) "
+                               f"cabe en un solo pase para el esquema (max_tokens_texto_permitido: {max_tokens_para_contenido_en_pase_unico}).")
             esquema_final_texto = llm_processing.generar_esquema_de_texto(texto_completo_transcripcion, es_parcial=False)
         else:
-            module_logger.info(f"La transcripción ({estimacion_tokens_transcripcion_total} tokens est.) excede el límite por chunk "
-                               f"({max_tokens_para_texto_en_mega_chunk} tokens). Se procederá con mega-chunking.")
+            module_logger.info(f"La transcripción ({num_tokens_contenido_transcripcion} tokens reales de contenido) excede el límite para pase único "
+                               f"({max_tokens_para_contenido_en_pase_unico} tokens). Se procederá con mega-chunking usando "
+                               f"max_tokens_contenido_chunk: {max_tokens_para_contenido_en_mega_chunk_individual}.")
             
+            if llm_processing.llm_instance is None:
+                module_logger.critical("La instancia del LLM no está disponible para el chunking. Saliendo.")
+                return
+
             mega_chunks = utils.dividir_en_mega_chunks(
                 texto_completo_transcripcion,
-                max_tokens_para_texto_en_mega_chunk,
-                config.MEGA_CHUNK_OVERLAP_WORDS
+                max_tokens_para_contenido_en_mega_chunk_individual,
+                config.MEGA_CHUNK_OVERLAP_WORDS,
+                llm_tokenizer_instance=llm_processing.llm_instance
             )
             if not mega_chunks:
                 module_logger.critical("No se pudieron generar mega-chunks. Verifique la transcripción y configuración.")
@@ -84,7 +114,16 @@ def main():
             module_logger.info(f"Transcripción dividida en {len(mega_chunks)} mega-chunks para la generación de esquemas parciales.")
             esquemas_parciales = []
             for i, mega_chunk_texto in enumerate(mega_chunks):
-                module_logger.info(f"  Procesando mega-chunk {i+1}/{len(mega_chunks)} ({len(mega_chunk_texto.split())} palabras)")
+                palabras_chunk_actual = len(mega_chunk_texto.split())
+                tokens_chunk_actual_reales = 0 # Inicializar
+                try:
+                    if llm_processing.llm_instance: # Asegurarse de que la instancia existe
+                        tokens_chunk_actual_reales = len(llm_processing.llm_instance.tokenize(mega_chunk_texto.encode('utf-8','ignore')))
+                except Exception as e_tok_chunk:
+                    module_logger.warning(f"No se pudo tokenizar el mega-chunk {i+1} para logging: {e_tok_chunk}")
+                    tokens_chunk_actual_reales = "N/A" # Indicar que no se pudo calcular
+
+                module_logger.info(f"  Procesando mega-chunk {i+1}/{len(mega_chunks)} ({palabras_chunk_actual} palabras, ~{tokens_chunk_actual_reales} tokens).")
                 esquema_parcial = llm_processing.generar_esquema_de_texto(
                     mega_chunk_texto, es_parcial=True, chunk_num=i + 1, total_chunks=len(mega_chunks)
                 )
@@ -103,10 +142,10 @@ def main():
         if esquema_final_texto:
             utils.guardar_texto_a_archivo(esquema_final_texto, config.OUTPUT_ESQUEMA_PATH, "esquema de la clase")
         else:
-            module_logger.critical("Falló la generación del esquema final.") # Este log ya existía, se mantiene
-            return # Asegurar que salimos si falla la generación
+            module_logger.critical("Falló la generación del esquema final.")
+            return
 
-    if not esquema_final_texto or not esquema_final_texto.strip(): # Este chequeo sigue siendo útil por si la generación falla y devuelve None/vacío
+    if not esquema_final_texto or not esquema_final_texto.strip():
         module_logger.critical("No hay esquema disponible (falló la generación). Saliendo.")
         return
 

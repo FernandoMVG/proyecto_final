@@ -6,14 +6,14 @@ import logging # <--- Importar logging
 from src import config
 from src import prompts
 
-logger = logging.getLogger(__name__) # <--- Obtener logger para este módulo
-llm_instance = None
+logger = logging.getLogger(__name__)
+llm_instance = None # Esta será la instancia global del modelo cargado
 
 def cargar_modelo_llm():
     global llm_instance
     if llm_instance is not None:
         logger.info("Modelo LLM ya está cargado.")
-        return llm_instance
+        return llm_instance # Devuelve la instancia existente
 
     logger.info(f"Cargando modelo desde: {config.MODEL_PATH}")
     if not os.path.exists(config.MODEL_PATH):
@@ -21,17 +21,18 @@ def cargar_modelo_llm():
         return None
     try:
         start_time_carga = time.time()
+        # Asignar a la variable global para que otros módulos puedan acceder a ella
         llm_instance = Llama(
             model_path=config.MODEL_PATH,
             n_ctx=config.CONTEXT_SIZE,
             n_threads=config.N_THREADS,
             n_gpu_layers=config.N_GPU_LAYERS,
             n_batch=config.N_BATCH_LLAMA,
-            verbose=config.LLM_VERBOSE # Controla el verbose de llama.cpp
+            verbose=config.LLM_VERBOSE
         )
         end_time_carga = time.time()
         logger.info(f"Modelo LLM cargado exitosamente en {end_time_carga - start_time_carga:.2f} segundos.")
-        return llm_instance
+        return llm_instance # Devolver la instancia también
     except Exception as e:
         logger.critical(f"Al cargar el modelo LLM: {e}", exc_info=True)
         logger.info("Posibles causas: CONTEXT_SIZE, archivo corrupto, Llama.cpp sin soporte GPU.")
@@ -43,17 +44,30 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
         logger.critical(f"Modelo LLM no cargado. No se puede procesar '{descripcion_tarea}'.")
         return None, "llm_not_loaded", {}
 
-    logger.info(f"Enviando prompt al LLM para '{descripcion_tarea}' (max_tokens_out: {max_tokens_salida}, temp: {temperatura}).")
-    # Opcional: Loguear el prompt solo si el nivel DEBUG está activo
-    if logger.isEnabledFor(logging.DEBUG):
-        # Evitar tokenizar si el llm_instance aún no está cargado, aunque la guarda anterior debería prevenirlo.
-        prompt_tokens_count_debug = 0
+    # Contar tokens del prompt real para logging y posible advertencia
+    num_tokens_prompt_reales = 0
+    try:
+        # Asegurarse de que llm_instance esté disponible para tokenizar
         if llm_instance:
-            try:
-                prompt_tokens_count_debug = len(llm_instance.tokenize(prompt_texto.encode('utf-8', 'ignore')))
-            except Exception as e: # Captura cualquier error durante la tokenización para debug
-                logger.debug(f"No se pudo tokenizar el prompt para debug: {e}")
-        logger.debug(f"Prompt para '{descripcion_tarea}' ({prompt_tokens_count_debug} tokens aprox):\n'''\n{prompt_texto[:500]}...\n'''")
+            num_tokens_prompt_reales = len(llm_instance.tokenize(prompt_texto.encode('utf-8', 'ignore')))
+        else:
+            logger.warning(f"llm_instance no disponible para tokenizar prompt para '{descripcion_tarea}' (conteo previo).")
+    except Exception as e_tok:
+        logger.warning(f"No se pudo tokenizar el prompt para '{descripcion_tarea}' para conteo previo: {e_tok}")
+
+    logger.info(f"Enviando prompt al LLM para '{descripcion_tarea}' (~{num_tokens_prompt_reales} tokens), "
+                f"max_tokens_out: {max_tokens_salida}, temp: {temperatura}.")
+
+    # Advertencia si el prompt real + salida excede el contexto
+    # Usamos un factor de seguridad un poco menor aquí (ej. 0.98) porque es una verificación final
+    # y num_tokens_prompt_reales es ahora más preciso.
+    if num_tokens_prompt_reales > 0 and \
+       (num_tokens_prompt_reales + max_tokens_salida) > config.CONTEXT_SIZE * 0.98:
+        logger.warning(f"El prompt actual ({num_tokens_prompt_reales} tokens) + salida ({max_tokens_salida}) "
+                       f"podría exceder CONTEXT_SIZE ({config.CONTEXT_SIZE}). Total: {num_tokens_prompt_reales + max_tokens_salida}")
+    
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Prompt para '{descripcion_tarea}':\n'''\n{prompt_texto[:500]}...\n'''")
     
     start_time_llm = time.time()
     try:
@@ -71,54 +85,53 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
         texto_generado = ""
         finish_reason = "desconocido"
         tokens_generados = 0
-        tokens_prompt = 0 # Inicializar para el caso de error antes de obtener 'usage'
+        tokens_prompt_from_usage = 0 # Tokens del prompt según 'usage'
 
         if output and 'choices' in output and len(output['choices']) > 0:
             texto_generado = output['choices'][0]['text'].strip()
             finish_reason = output['choices'][0].get('finish_reason', 'desconocido')
-            if finish_reason is None: # Llama.cpp puede devolver None
-                finish_reason = "completed_unknown" # O "stop" si es más probable
+            if finish_reason is None: finish_reason = "completed_unknown"
             
             usage_stats = output.get('usage', {})
             tokens_generados = usage_stats.get('completion_tokens', 0)
-            if tokens_generados == 0 and texto_generado and llm_instance:
+            if tokens_generados == 0 and texto_generado:
                 try:
                     tokens_generados = len(llm_instance.tokenize(texto_generado.encode('utf-8', 'ignore')))
                 except Exception as e:
                      logger.debug(f"No se pudo tokenizar el texto generado para fallback: {e}")
 
-
-            tokens_prompt = usage_stats.get('prompt_tokens', 0)
-            # El fallback para tokens_prompt ya se hizo en el log DEBUG si estaba activo.
-            # Si no, y 'prompt_tokens' es 0, podríamos tokenizar aquí también, pero
-            # es menos crítico que los tokens_generados para la tasa.
-            if tokens_prompt == 0 and llm_instance and 'prompt_tokens_count_debug' not in locals() : # Si no se calculó en debug
-                try:
-                    tokens_prompt = len(llm_instance.tokenize(prompt_texto.encode('utf-8', 'ignore')))
-                except Exception as e:
-                    logger.debug(f"No se pudo tokenizar el prompt para fallback de tokens_prompt: {e}")
-
+            tokens_prompt_from_usage = usage_stats.get('prompt_tokens', 0)
+        
         else:
             logger.warning(f"La salida del LLM para '{descripcion_tarea}' fue inesperada o vacía. Output: {output}")
-            # Intentar obtener tokens_prompt si se calculó en debug
-            calculated_tokens_prompt = 0
-            if 'prompt_tokens_count_debug' in locals(): # Si el logger DEBUG estaba activo
-                calculated_tokens_prompt = prompt_tokens_count_debug
-            return None, "empty_or_invalid_llm_output", {"tokens_prompt": calculated_tokens_prompt}
+            # Usar el conteo pre-calculado si la salida es vacía
+            return None, "empty_or_invalid_llm_output", {"tokens_prompt": num_tokens_prompt_reales}
+
+        # Determinar el conteo final de tokens del prompt para stats
+        # Priorizar 'usage', luego el pre-cálculo, luego un nuevo intento de tokenizar si todo es 0
+        final_tokens_prompt_stat = tokens_prompt_from_usage
+        if final_tokens_prompt_stat == 0:
+            if num_tokens_prompt_reales > 0:
+                final_tokens_prompt_stat = num_tokens_prompt_reales
+            elif llm_instance: # Si ambos son 0, intentar tokenizar de nuevo como último recurso
+                try:
+                    final_tokens_prompt_stat = len(llm_instance.tokenize(prompt_texto.encode('utf-8', 'ignore')))
+                except Exception:
+                    pass # Mantener 0 si falla
 
         tokens_por_segundo = 0
         if processing_time > 0 and tokens_generados > 0:
             tokens_por_segundo = tokens_generados / processing_time
         
         stats = {
-            "tokens_prompt": tokens_prompt,
+            "tokens_prompt": final_tokens_prompt_stat,
             "tokens_generados": tokens_generados,
             "processing_time_seconds": processing_time,
             "tokens_por_segundo": tokens_por_segundo
         }
 
         logger.info(f"LLM Task '{descripcion_tarea}' completada en {processing_time:.2f} seg.")
-        logger.info(f"  Stats: Prompt Tokens: {tokens_prompt}, Tokens Generados: {tokens_generados}, Tasa: {tokens_por_segundo:.2f} tokens/seg.")
+        logger.info(f"  Stats: Prompt Tokens: {stats['tokens_prompt']}, Tokens Generados: {tokens_generados}, Tasa: {tokens_por_segundo:.2f} tokens/seg.")
         logger.info(f"  Finish Reason: {finish_reason}")
 
         if finish_reason == 'length':
@@ -133,7 +146,8 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
 
     except Exception as e:
         logger.error(f"Durante la llamada al LLM para '{descripcion_tarea}': {e}", exc_info=True)
-        return None, f"exception_during_llm_call: {str(e)}", {}
+        # Devolver el conteo pre-calculado de tokens del prompt si está disponible
+        return None, f"exception_during_llm_call: {str(e)}", {"tokens_prompt": num_tokens_prompt_reales}
 
 
 def generar_esquema_de_texto(texto_para_esquema, es_parcial=False, chunk_num=None, total_chunks=None):
@@ -149,20 +163,8 @@ def generar_esquema_de_texto(texto_para_esquema, es_parcial=False, chunk_num=Non
     prompt_final_esquema = prompts.PROMPT_GENERAR_ESQUEMA_TEMPLATE.format(texto_completo=texto_para_esquema)
     max_tokens_para_este_esquema = config.MAX_TOKENS_ESQUEMA_PARCIAL if es_parcial else config.MAX_TOKENS_ESQUEMA_FUSIONADO
     
-    prompt_template_sin_texto = prompts.PROMPT_GENERAR_ESQUEMA_TEMPLATE.replace("{texto_completo}", "")
-    factor_conversion = config.FACTOR_PALABRAS_A_TOKENS_APROX if config.FACTOR_PALABRAS_A_TOKENS_APROX > 0 else 1.5
-    
-    # Estimación de tokens del prompt
-    # Si factor_conversion es PALABRAS / TOKEN (ej. 1.7), entonces TOKENS = PALABRAS / factor_conversion
-    tokens_prompt_template_aprox = len(prompt_template_sin_texto.split()) / factor_conversion
-    tokens_texto_contenido_aprox = len(texto_para_esquema.split()) / factor_conversion
-    tokens_totales_prompt_aprox = tokens_prompt_template_aprox + tokens_texto_contenido_aprox
-
-    if tokens_totales_prompt_aprox + max_tokens_para_este_esquema > config.CONTEXT_SIZE:
-        logger.warning(f"El prompt ({tokens_totales_prompt_aprox:.0f} tokens) + salida ({max_tokens_para_este_esquema}) "
-                       f"EXCEDEN CONTEXT_SIZE ({config.CONTEXT_SIZE}). La calidad podría verse afectada o fallar.")
-    elif tokens_totales_prompt_aprox > config.CONTEXT_SIZE * 0.9:
-         logger.info(f"El prompt ({tokens_totales_prompt_aprox:.0f} tokens) ocupa una gran parte del CONTEXT_SIZE ({config.CONTEXT_SIZE}).")
+    # Ya no se hacen estimaciones de tokens de prompt aquí basadas en factor.
+    # _llamar_al_llm ahora maneja un conteo más preciso y las advertencias.
 
     esquema_generado, _, _ = _llamar_al_llm(
         prompt_texto=prompt_final_esquema,
@@ -188,15 +190,7 @@ def fusionar_esquemas(lista_esquemas_parciales):
     
     prompt_final_fusion = prompts.PROMPT_FUSIONAR_ESQUEMAS_TEMPLATE.format(texto_esquemas_parciales=texto_esquemas_concatenados)
     
-    factor_conversion = config.FACTOR_PALABRAS_A_TOKENS_APROX if config.FACTOR_PALABRAS_A_TOKENS_APROX > 0 else 1.5
-    tokens_prompt_fusion_aprox = len(prompt_final_fusion.split()) / factor_conversion
-
-    if tokens_prompt_fusion_aprox + config.MAX_TOKENS_ESQUEMA_FUSIONADO > config.CONTEXT_SIZE:
-        logger.warning(f"El prompt de fusión ({tokens_prompt_fusion_aprox:.0f} tokens) + salida ({config.MAX_TOKENS_ESQUEMA_FUSIONADO}) "
-                       f"EXCEDEN CONTEXT_SIZE ({config.CONTEXT_SIZE}). La fusión podría fallar o ser incompleta.")
-    elif tokens_prompt_fusion_aprox > config.CONTEXT_SIZE * 0.85:
-        logger.info(f"El prompt de esquemas parciales para fusionar ({tokens_prompt_fusion_aprox:.0f} tokens est.) "
-                       f"es muy largo para el CONTEXT_SIZE ({config.CONTEXT_SIZE}).")
+    # Ya no se hacen estimaciones de tokens de prompt aquí basadas en factor.
 
     esquema_fusionado, _, _ = _llamar_al_llm(
         prompt_texto=prompt_final_fusion,
