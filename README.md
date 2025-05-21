@@ -1,5 +1,7 @@
 # Proyecto Final - Generador de Esquemas de Clase con LLM
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/FernandoMVG/proyecto_final)
+
 Este proyecto utiliza un Modelo de Lenguaje Grande (LLM) local para procesar transcripciones de clases universitarias (ej. Optimización o Estructuras de Datos). Si la transcripción es muy larga, se divide en fragmentos (chunks), se genera un esquema parcial para cada uno, y luego estos esquemas parciales se fusionan en un esquema maestro final. El resultado es un esquema jerárquico detallado de la clase en formato de texto.
 
 ## Prerrequisitos del Sistema
