@@ -151,11 +151,22 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
 
 
 def generar_esquema_de_texto(texto_para_esquema, es_parcial=False, chunk_num=None, total_chunks=None):
+
     if es_parcial:
         num_str = str(chunk_num) if chunk_num is not None else "?"
         total_str = str(total_chunks) if total_chunks is not None else "?"
         descripcion_proceso_base = f"Esquema Parcial (Mega-Chunk {num_str}/{total_str})"
-    else:
+        prompt_final_esquema = prompts.PROMPT_GENERAR_ESQUEMA_PARCIAL_TEMPLATE.format(
+            texto_fragmento=texto_para_esquema,
+            chunk_numero=chunk_num,
+            total_chunks=total_chunks
+        )
+        max_tokens_para_este_esquema = config.MAX_TOKENS_ESQUEMA_PARCIAL
+    else: # Pase único, transcripción completa
+        prompt_final_esquema = prompts.PROMPT_GENERAR_ESQUEMA_TEMPLATE.format(
+            texto_completo=texto_para_esquema
+        )
+        max_tokens_para_este_esquema = config.MAX_TOKENS_ESQUEMA_FUSIONADO
         descripcion_proceso_base = "Esquema Completo (Pase Único)"
     
     logger.info(f"Iniciando Generación de {descripcion_proceso_base}")
