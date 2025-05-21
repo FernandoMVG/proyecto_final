@@ -1,40 +1,39 @@
 # src/utils.py
 import os
-import time # Necesario para el gestor de contexto timed_phase (opcional)
-from contextlib import contextmanager # Para timed_phase (opcional)
+import time
+from contextlib import contextmanager
+import logging # <--- Importar
 from src import config
+
+logger = logging.getLogger(__name__) # <--- Logger para este módulo
 
 def format_duration(seconds):
     """Formatea la duración en segundos a un string de minutos y segundos."""
-    if seconds < 0:
-        return "N/A (tiempo negativo)"
+    if seconds < 0: return "N/A (tiempo negativo)"
     minutes = int(seconds // 60)
     remaining_seconds = seconds % 60
-    if minutes == 0:
-        return f"{remaining_seconds:.2f} seg"
+    if minutes == 0: return f"{remaining_seconds:.2f} seg"
     return f"{minutes} min {remaining_seconds:.2f} seg"
 
 @contextmanager
 def timed_phase(phase_name):
-    """
-    Gestor de contexto para medir e imprimir la duración de una fase del proceso.
-    """
-    print(f"\n--- Iniciando Fase: {phase_name} ---")
+    logger.info(f"--- Iniciando Fase: {phase_name} ---")
     start_time = time.time()
     yield
     duration = time.time() - start_time
-    print(f"--- Fin Fase: {phase_name} (Duración: {format_duration(duration)}) ---")
-
+    logger.info(f"--- Fin Fase: {phase_name} (Duración: {format_duration(duration)}) ---")
 
 def leer_archivo(ruta_archivo):
-    """Lee el contenido de un archivo de texto."""
+    logger.debug(f"Intentando leer archivo: {ruta_archivo}")
     try:
         with open(ruta_archivo, 'r', encoding='utf-8') as f:
-            return f.read()
+            content = f.read()
+            logger.info(f"Archivo '{ruta_archivo}' leído exitosamente ({len(content)} caracteres).")
+            return content
     except FileNotFoundError:
-        print(f"ERROR: Archivo no encontrado en {ruta_archivo}")
+        logger.error(f"Archivo no encontrado en {ruta_archivo}")
         if ruta_archivo == config.INPUT_FILE_PATH:
-            print(f"Creando un archivo de ejemplo '{config.INPUT_FILE_NAME}' en la carpeta 'data'. Por favor, edítalo.")
+            logger.info(f"Creando un archivo de ejemplo '{config.INPUT_FILE_NAME}' en la carpeta 'data'. Por favor, edítalo.")
             ejemplo_txt = """Este es un texto de ejemplo para la transcripción de la clase de Optimización.
 La Programación Lineal es una técnica matemática utilizada para encontrar la mejor solución posible (óptima) 
 en un modelo matemático cuyos requisitos están representados por relaciones lineales. 
@@ -46,62 +45,67 @@ Se discuten los conceptos de variables básicas y no básicas, y cómo se itera 
 Se presenta un ejemplo simple de un problema de maximización de beneficios con dos variables y tres restricciones.
 El profesor enfatiza la importancia de entender las condiciones de optimalidad y factibilidad.
 """
-            os.makedirs(os.path.dirname(config.INPUT_FILE_PATH), exist_ok=True) # Asegurar que 'data' exista
-            with open(config.INPUT_FILE_PATH, 'w', encoding='utf-8') as f:
-                 f.write(ejemplo_txt)
-            return ejemplo_txt
+            try:
+                os.makedirs(os.path.dirname(config.INPUT_FILE_PATH), exist_ok=True)
+                with open(config.INPUT_FILE_PATH, 'w', encoding='utf-8') as f:
+                     f.write(ejemplo_txt)
+                logger.info(f"Archivo de ejemplo '{config.INPUT_FILE_NAME}' creado.")
+                return ejemplo_txt
+            except Exception as e_create:
+                logger.error(f"No se pudo crear el archivo de ejemplo: {e_create}", exc_info=True)
         return None
     except Exception as e:
-        print(f"ERROR al leer el archivo {ruta_archivo}: {e}")
+        logger.error(f"Al leer el archivo {ruta_archivo}: {e}", exc_info=True)
         return None
 
 def guardar_texto_a_archivo(texto_generado, ruta_archivo, descripcion_archivo="archivo"):
-    """Guarda el texto generado en un archivo."""
     if texto_generado:
-        print(f"\nGuardando {descripcion_archivo} en: {ruta_archivo}")
+        logger.info(f"Guardando {descripcion_archivo} en: {ruta_archivo}")
         try:
-            os.makedirs(os.path.dirname(ruta_archivo), exist_ok=True) # Asegurar que 'output' exista
+            os.makedirs(os.path.dirname(ruta_archivo), exist_ok=True)
             with open(ruta_archivo, 'w', encoding='utf-8') as f:
                 f.write(texto_generado)
-            print(f"¡{descripcion_archivo.capitalize()} guardado exitosamente!")
+            logger.info(f"¡{descripcion_archivo.capitalize()} guardado exitosamente!")
         except Exception as e:
-            print(f"ERROR al guardar {descripcion_archivo}: {e}")
+            logger.error(f"Al guardar {descripcion_archivo} en '{ruta_archivo}': {e}", exc_info=True)
     else:
-        print(f"\nNo se pudo guardar {descripcion_archivo} (contenido vacío o error previo).")
+        logger.warning(f"No se pudo guardar {descripcion_archivo} en '{ruta_archivo}' (contenido vacío o error previo).")
 
 def crear_directorios_necesarios():
-    """Crea las carpetas de data y output si no existen."""
-    os.makedirs(os.path.join(config.BASE_PROJECT_DIR, "output"), exist_ok=True)
-    os.makedirs(os.path.join(config.BASE_PROJECT_DIR, "data"), exist_ok=True)
+    logger.debug(f"Asegurando que los directorios base existan: output y data en {config.BASE_PROJECT_DIR}")
+    try:
+        os.makedirs(os.path.join(config.BASE_PROJECT_DIR, "output"), exist_ok=True)
+        os.makedirs(os.path.join(config.BASE_PROJECT_DIR, "data"), exist_ok=True)
+        logger.debug("Directorios 'output' y 'data' listos.")
+    except Exception as e:
+        logger.error(f"No se pudieron crear los directorios necesarios: {e}", exc_info=True)
+
 
 def _dividir_texto_en_chunks_por_palabras_base(texto_completo, tamano_chunk_palabras, superposicion_palabras, origen_llamada="chunking"):
-    """
-    Función base para dividir texto en chunks de un número específico de palabras con solapamiento.
-    """
     palabras = texto_completo.split()
     if not palabras:
+        logger.warning(f"({origen_llamada}): El texto a dividir está vacío.")
         return []
     
     chunks_generados = []
     indice_actual = 0
     
     if tamano_chunk_palabras <= 0:
-        print(f"ERROR ({origen_llamada}): tamano_chunk_palabras ({tamano_chunk_palabras}) debe ser positivo.")
+        logger.error(f"({origen_llamada}): tamano_chunk_palabras ({tamano_chunk_palabras}) debe ser positivo.")
         return []
 
     if superposicion_palabras < 0:
-        print(f"ADVERTENCIA ({origen_llamada}): superposicion_palabras ({superposicion_palabras}) es negativa. Se usará 0.")
+        logger.warning(f"({origen_llamada}): superposicion_palabras ({superposicion_palabras}) es negativa. Se usará 0.")
         superposicion_palabras = 0
         
     if tamano_chunk_palabras <= superposicion_palabras:
-        print(f"ADVERTENCIA ({origen_llamada}): tamano_chunk_palabras ({tamano_chunk_palabras}) "
-              f"es <= superposicion_palabras ({superposicion_palabras}). "
-              f"Esto puede resultar en un avance de 0 o negativo. Ajustando superposición.")
+        logger.warning(f"({origen_llamada}): tamano_chunk_palabras ({tamano_chunk_palabras}) "
+                       f"es <= superposicion_palabras ({superposicion_palabras}). Ajustando superposición.")
         if tamano_chunk_palabras > 1:
             superposicion_palabras = tamano_chunk_palabras - 1
-        else: # Si el tamaño del chunk es 1, no puede haber superposición útil.
+        else:
             superposicion_palabras = 0
-        print(f"    Nueva superposicion_palabras: {superposicion_palabras}")
+        logger.debug(f"    Nueva superposicion_palabras para ({origen_llamada}): {superposicion_palabras}")
 
     while indice_actual < len(palabras):
         inicio_chunk = indice_actual
@@ -111,34 +115,33 @@ def _dividir_texto_en_chunks_por_palabras_base(texto_completo, tamano_chunk_pala
         
         avance = max(1, tamano_chunk_palabras - superposicion_palabras)
         indice_actual += avance
-            
+    
+    logger.debug(f"({origen_llamada}): Texto dividido en {len(chunks_generados)} chunks.")
     return chunks_generados
 
 def dividir_en_mega_chunks(texto_completo, max_tokens_contenido_chunk_esquema, overlap_palabras):
-    """
-    Divide el texto en mega-chunks para la generación del esquema.
-    Calcula el número de palabras objetivo basado en tokens.
-    """
     if config.FACTOR_PALABRAS_A_TOKENS_APROX <= 0:
-        print("ERROR (mega-chunks): FACTOR_PALABRAS_A_TOKENS_APROX debe ser positivo.")
-        return []
+        logger.error("(mega-chunks): FACTOR_PALABRAS_A_TOKENS_APROX debe ser positivo.")
+        palabras_por_chunk_objetivo = 500 
+    else:
+        # Si FACTOR_PALABRAS_A_TOKENS_APROX es PALABRAS / TOKEN (ej. 1.7),
+        # entonces PALABRAS = TOKENS * FACTOR_PALABRAS_A_TOKENS_APROX
+        palabras_por_chunk_objetivo = int(max_tokens_contenido_chunk_esquema * config.FACTOR_PALABRAS_A_TOKENS_APROX)
         
-    palabras_por_chunk_objetivo = int(max_tokens_contenido_chunk_esquema / config.FACTOR_PALABRAS_A_TOKENS_APROX)
-    
     if palabras_por_chunk_objetivo <= 0:
-        print(f"ERROR (mega-chunks): Calculo de palabras_por_chunk_objetivo ({palabras_por_chunk_objetivo}) "
-              f"basado en max_tokens_contenido_chunk_esquema ({max_tokens_contenido_chunk_esquema}) es inválido. "
-              f"Verifica los valores de configuración.")
-        return []
+        logger.error(f"(mega-chunks): Calculo de palabras_por_chunk_objetivo ({palabras_por_chunk_objetivo}) "
+                     f"basado en max_tokens_contenido_chunk_esquema ({max_tokens_contenido_chunk_esquema}) es inválido. "
+                     f"Usando fallback de 100 palabras.")
+        palabras_por_chunk_objetivo = 100
 
     if palabras_por_chunk_objetivo <= overlap_palabras:
         original_calculado = palabras_por_chunk_objetivo
-        # Asegura un tamaño mínimo razonable y que sea mayor que el overlap
-        palabras_por_chunk_objetivo = overlap_palabras + min(100, max(1, overlap_palabras)) # Ajuste más dinámico
-        print(f"ADVERTENCIA (mega-chunks): max_tokens_por_chunk_contenido resulta en {original_calculado} palabras/chunk, "
-              f"que es <= overlap_palabras ({overlap_palabras}). Ajustando palabras_por_chunk_objetivo a {palabras_por_chunk_objetivo}")
+        # Asegurar que sea al menos 1 más que el overlap para que haya nuevo contenido
+        palabras_por_chunk_objetivo = overlap_palabras + min(100, max(1, int(overlap_palabras * 0.2) + 1))
+        logger.warning(f"(mega-chunks): palabras_por_chunk_objetivo ({original_calculado}) "
+                       f"es <= overlap_palabras ({overlap_palabras}). Ajustando a {palabras_por_chunk_objetivo}")
     
-    print(f"INFO (mega-chunks): Creando mega-chunks de aprox. {palabras_por_chunk_objetivo} palabras cada uno.")
+    logger.info(f"(mega-chunks): Creando mega-chunks de aprox. {palabras_por_chunk_objetivo} palabras cada uno.")
     return _dividir_texto_en_chunks_por_palabras_base(
         texto_completo,
         palabras_por_chunk_objetivo,
