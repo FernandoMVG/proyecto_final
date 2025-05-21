@@ -21,7 +21,7 @@ OUTPUT_APUNTES_PATH = os.path.join(BASE_PROJECT_DIR, "output", OUTPUT_APUNTES_FI
 
 # --- Configuración del LLM ---
 # ¡IMPORTANTE! Aumenta CONTEXT_SIZE al máximo que tu modelo y hardware soporten
-CONTEXT_SIZE = 16384  # Esto es el tamaño máximo de contexto del modelo
+CONTEXT_SIZE = 8192  # Esto es el tamaño máximo de contexto del modelo
                       
 # Necesitaremos muchos tokens para generar un esquema detallado de una clase larga
 # MAX_TOKENS_ESQUEMA = 4096 # Empieza con esto, podrías necesitar aumentarlo a 8192 o más.
@@ -43,5 +43,5 @@ LLM_TEMPERATURE_APUNTES = 0.5
 # Un valor más bajo es más seguro pero puede generar más mega-chunks.
 MEGA_CHUNK_CONTEXT_FACTOR = 0.7 
 # Solapamiento entre mega-chunks (en número de palabras)
-MEGA_CHUNK_OVERLAP_WORDS = 200
+MEGA_CHUNK_OVERLAP_WORDS = 0
 FACTOR_PALABRAS_A_TOKENS_APROX = 1.7 

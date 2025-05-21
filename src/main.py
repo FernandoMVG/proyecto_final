@@ -70,27 +70,27 @@ def main():
 
     utils.guardar_texto_a_archivo(esquema_final, config.OUTPUT_ESQUEMA_PATH, "esquema de la clase")
     
-    # --- NUEVO: Cargar esquema existente ---
-    print(f"\nINFO: Intentando cargar esquema existente desde: {config.OUTPUT_ESQUEMA_PATH}")
-    esquema_final = utils.leer_archivo(config.OUTPUT_ESQUEMA_PATH) # Usamos la misma función de leer_archivo
+    # # --- NUEVO: Cargar esquema existente ---
+    # print(f"\nINFO: Intentando cargar esquema existente desde: {config.OUTPUT_ESQUEMA_PATH}")
+    # esquema_final = utils.leer_archivo(config.OUTPUT_ESQUEMA_PATH) # Usamos la misma función de leer_archivo
     
-    if not esquema_final:
-        print(f"ERROR CRÍTICO: No se pudo cargar el esquema desde {config.OUTPUT_ESQUEMA_PATH}. "
-              "Asegúrate de que el archivo exista y la ruta en config.py sea correcta. No se pueden generar apuntes. Saliendo.")
-        return
-    else:
-        print("INFO: Esquema existente cargado exitosamente.")
+    # if not esquema_final:
+    #     print(f"ERROR CRÍTICO: No se pudo cargar el esquema desde {config.OUTPUT_ESQUEMA_PATH}. "
+    #           "Asegúrate de que el archivo exista y la ruta en config.py sea correcta. No se pueden generar apuntes. Saliendo.")
+    #     return
+    # else:
+    #     print("INFO: Esquema existente cargado exitosamente.")
     
-    # print("\n--- Fin Fase de Generación de Esquema ---") # Comentado o renombrar a "Carga de Esquema"
-    # --- FIN: SECCIÓN MODIFICADA ---
+    # # print("\n--- Fin Fase de Generación de Esquema ---") # Comentado o renombrar a "Carga de Esquema"
+    # # --- FIN: SECCIÓN MODIFICADA ---
     
-    # --- Fase de Generación de Apuntes Detallados ---
-    # Esta parte permanece igual, pero ahora usará el esquema_final cargado
-    print("\n--- Fase de Generación de Apuntes Detallados ---")
-    apuntes_completos = llm_processing.generar_apuntes_desde_esquema(texto_completo, esquema_final)
+    # # --- Fase de Generación de Apuntes Detallados ---
+    # # Esta parte permanece igual, pero ahora usará el esquema_final cargado
+    # print("\n--- Fase de Generación de Apuntes Detallados ---")
+    # apuntes_completos = llm_processing.generar_apuntes_desde_esquema(texto_completo, esquema_final)
     
-    utils.guardar_texto_a_archivo(apuntes_completos, config.OUTPUT_APUNTES_PATH, "apuntes detallados de la clase")
-    print("--- Fin Fase de Generación de Apuntes Detallados ---")
+    # utils.guardar_texto_a_archivo(apuntes_completos, config.OUTPUT_APUNTES_PATH, "apuntes detallados de la clase")
+    # print("--- Fin Fase de Generación de Apuntes Detallados ---")
     
     print("\n--- Proceso Completo Terminado (Solo Generación de Apuntes) ---")
 
