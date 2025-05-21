@@ -2,6 +2,7 @@
 from llama_cpp import Llama
 import os
 import time
+import re
 import logging # <--- Importar logging
 from src import config
 from src import prompts
@@ -205,11 +206,70 @@ def fusionar_esquemas(lista_esquemas_parciales):
         texto_esquemas_concatenados += f"--- ESQUEMA PARCIAL {i+1} ---\n{esquema_p}\n\n"
     
     prompt_final_fusion = prompts.PROMPT_FUSIONAR_ESQUEMAS_TEMPLATE.format(texto_esquemas_parciales=texto_esquemas_concatenados)
+
+    stop_sequences_fusion = [
+        "\n\n--- FIN DE LA RESPUESTA ---",
+        "\n---", # Una secuencia más genérica por si acaso
+        "\nEste esquema maestro fusionado representa" # Otra parte del texto no deseado
+    ]
     
     esquema_fusionado, _, _ = _llamar_al_llm(
         prompt_texto=prompt_final_fusion,
         max_tokens_salida=config.MAX_TOKENS_ESQUEMA_FUSIONADO,
         temperatura=config.LLM_TEMPERATURE_FUSION,
-        descripcion_tarea="Fusión de Esquemas"
+        descripcion_tarea="Fusión de Esquemas",
+        stop_sequences=stop_sequences_fusion
     )
     return esquema_fusionado
+
+def generar_apuntes_por_seccion(seccion_esquema_actual, transcripcion_completa, num_seccion=None, total_secciones=None):
+    """
+    Genera apuntes para una sección específica del esquema, usando la transcripción completa como contexto.
+    """
+    if llm_instance is None:
+        logger.critical("Modelo LLM no cargado. No se pueden generar apuntes para la sección.")
+        return "" 
+    if not seccion_esquema_actual or not seccion_esquema_actual.strip():
+        logger.warning(f"Sección del esquema vacía proporcionada (Sección {num_seccion or '?'}). Saltando.")
+        return ""
+    if not transcripcion_completa:
+        logger.error("Transcripción completa no proporcionada. No se pueden generar apuntes.")
+        return ""
+
+    # Extraer un título corto de la sección para logging
+    primera_linea_seccion = seccion_esquema_actual.strip().split('\n')[0]
+    titulo_seccion_log = re.sub(r"^\s*\d+(\.\d+)*\.\s*", "", primera_linea_seccion).strip() # Quitar numeración
+    titulo_seccion_log = titulo_seccion_log[:50] + "..." if len(titulo_seccion_log) > 50 else titulo_seccion_log
+    
+    descripcion_tarea = f"Apuntes para Sección {num_seccion or '?'}/{total_secciones or '?'} ('{titulo_seccion_log}')"
+    logger.info(f"Iniciando generación de {descripcion_tarea}")
+
+    prompt_final_apuntes = prompts.PROMPT_GENERAR_APUNTES_POR_SECCION_TEMPLATE.format(
+        seccion_del_esquema_actual=seccion_esquema_actual,
+        contexto_relevante_de_transcripcion=transcripcion_completa # Pasando la transcripción completa
+    )
+
+    # Advertencia sobre el tamaño del prompt (transcripción completa + sección del esquema + prompt template)
+    # Esto es solo una estimación muy burda porque tokenizar todo aquí sería costoso.
+    # El conteo real y la advertencia más precisa ocurrirán dentro de _llamar_al_llm.
+    len_prompt_aprox_palabras = len(prompt_final_apuntes.split())
+    if len_prompt_aprox_palabras * 0.7 > config.CONTEXT_SIZE : # Asumiendo ~0.7 tokens/palabra (muy conservador)
+         logger.warning(f"El prompt para '{descripcion_tarea}' (incluyendo transcripción completa) "
+                        f"es potencialmente MUY GRANDE (~{len_prompt_aprox_palabras} palabras). "
+                        "Podría exceder el límite de contexto.")
+
+    # Definir secuencias de parada para evitar texto no deseado al final de los apuntes de sección
+    stop_sequences_apuntes = [
+        "\n\n--- FIN DE APUNTES ---", # Ejemplo, ajustar si es necesario
+        "\n\n## " # Si empieza a generar la siguiente sección por error
+    ]
+
+    apuntes_seccion, _, _ = _llamar_al_llm(
+        prompt_texto=prompt_final_apuntes,
+        max_tokens_salida=config.MAX_TOKENS_APUNTES_POR_SECCION,
+        temperatura=config.LLM_TEMPERATURE_APUNTES,
+        descripcion_tarea=descripcion_tarea,
+        stop_sequences=stop_sequences_apuntes
+    )
+
+    return apuntes_seccion if apuntes_seccion else ""
