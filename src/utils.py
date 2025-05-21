@@ -145,13 +145,3 @@ def dividir_en_mega_chunks(texto_completo, max_tokens_contenido_chunk_esquema, o
         overlap_palabras,
         origen_llamada="mega-chunks"
     )
-
-def dividir_texto_para_bd_vectorial(texto_completo, tamano_chunk_palabras, superposicion_palabras):
-    """Divide el texto en chunks más pequeños para poblar la BD vectorial."""
-    print(f"INFO (bd-vectorial): Creando chunks para BD vectorial de {tamano_chunk_palabras} palabras cada uno.")
-    return _dividir_texto_en_chunks_por_palabras_base(
-        texto_completo,
-        tamano_chunk_palabras,
-        superposicion_palabras,
-        origen_llamada="bd-vectorial-chunks"
-    )
