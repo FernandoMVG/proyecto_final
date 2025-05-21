@@ -50,72 +50,64 @@ def main():
         module_logger.info(f"Transcripción leída: {num_palabras_total} palabras (~{estimacion_tokens_transcripcion_total} tokens estimados).")
 
     esquema_final_texto = None
-    with utils.timed_phase("Carga o Generación de Esquema Jerárquico"):
-        if os.path.exists(config.OUTPUT_ESQUEMA_PATH):
-            module_logger.info(f"Intentando cargar esquema existente desde: {config.OUTPUT_ESQUEMA_PATH}")
-            esquema_final_texto = utils.leer_archivo(config.OUTPUT_ESQUEMA_PATH)
-            if esquema_final_texto:
-                module_logger.info("Esquema existente cargado exitosamente.")
-            else:
-                module_logger.warning(f"No se pudo cargar el esquema desde {config.OUTPUT_ESQUEMA_PATH}. Se generará uno nuevo.")
-
-        if not esquema_final_texto:
-            module_logger.info("No se encontró esquema previo o no se pudo cargar. Procediendo a generar nuevo esquema.")
+    # --- MODIFICACIÓN AQUÍ: Eliminada la carga de esquema existente ---
+    with utils.timed_phase("Generación de Esquema Jerárquico"):
+        module_logger.info("Procediendo a generar nuevo esquema.") # Mensaje directo
             
-            tokens_prompt_base_esquema_aprox = 200 
-            max_tokens_para_texto_en_mega_chunk = int(
-                (config.CONTEXT_SIZE * config.MEGA_CHUNK_CONTEXT_FACTOR) - tokens_prompt_base_esquema_aprox - config.MAX_TOKENS_ESQUEMA_PARCIAL
+        tokens_prompt_base_esquema_aprox = 200 
+        max_tokens_para_texto_en_mega_chunk = int(
+            (config.CONTEXT_SIZE * config.MEGA_CHUNK_CONTEXT_FACTOR) - tokens_prompt_base_esquema_aprox - config.MAX_TOKENS_ESQUEMA_PARCIAL
+        )
+
+        if max_tokens_para_texto_en_mega_chunk <=0:
+            module_logger.critical(f"max_tokens_para_texto_en_mega_chunk ({max_tokens_para_texto_en_mega_chunk}) no es positivo. "
+                                   "Verifica CONTEXT_SIZE, MEGA_CHUNK_CONTEXT_FACTOR, y estimaciones. No se puede proceder.")
+            return
+
+        if estimacion_tokens_transcripcion_total <= max_tokens_para_texto_en_mega_chunk:
+            module_logger.info(f"La transcripción ({estimacion_tokens_transcripcion_total} tokens est.) "
+                               f"cabe en un solo pase para el esquema (max_tokens_texto_permitido: {max_tokens_para_texto_en_mega_chunk}).")
+            esquema_final_texto = llm_processing.generar_esquema_de_texto(texto_completo_transcripcion, es_parcial=False)
+        else:
+            module_logger.info(f"La transcripción ({estimacion_tokens_transcripcion_total} tokens est.) excede el límite por chunk "
+                               f"({max_tokens_para_texto_en_mega_chunk} tokens). Se procederá con mega-chunking.")
+            
+            mega_chunks = utils.dividir_en_mega_chunks(
+                texto_completo_transcripcion,
+                max_tokens_para_texto_en_mega_chunk,
+                config.MEGA_CHUNK_OVERLAP_WORDS
             )
-
-            if max_tokens_para_texto_en_mega_chunk <=0:
-                module_logger.critical(f"max_tokens_para_texto_en_mega_chunk ({max_tokens_para_texto_en_mega_chunk}) no es positivo. "
-                                       "Verifica CONTEXT_SIZE, MEGA_CHUNK_CONTEXT_FACTOR, y estimaciones. No se puede proceder.")
+            if not mega_chunks:
+                module_logger.critical("No se pudieron generar mega-chunks. Verifique la transcripción y configuración.")
                 return
 
-            if estimacion_tokens_transcripcion_total <= max_tokens_para_texto_en_mega_chunk:
-                module_logger.info(f"La transcripción ({estimacion_tokens_transcripcion_total} tokens est.) "
-                                   f"cabe en un solo pase para el esquema (max_tokens_texto_permitido: {max_tokens_para_texto_en_mega_chunk}).")
-                esquema_final_texto = llm_processing.generar_esquema_de_texto(texto_completo_transcripcion, es_parcial=False)
-            else:
-                module_logger.info(f"La transcripción ({estimacion_tokens_transcripcion_total} tokens est.) excede el límite por chunk "
-                                   f"({max_tokens_para_texto_en_mega_chunk} tokens). Se procederá con mega-chunking.")
-                
-                mega_chunks = utils.dividir_en_mega_chunks(
-                    texto_completo_transcripcion,
-                    max_tokens_para_texto_en_mega_chunk,
-                    config.MEGA_CHUNK_OVERLAP_WORDS
+            module_logger.info(f"Transcripción dividida en {len(mega_chunks)} mega-chunks para la generación de esquemas parciales.")
+            esquemas_parciales = []
+            for i, mega_chunk_texto in enumerate(mega_chunks):
+                module_logger.info(f"  Procesando mega-chunk {i+1}/{len(mega_chunks)} ({len(mega_chunk_texto.split())} palabras)")
+                esquema_parcial = llm_processing.generar_esquema_de_texto(
+                    mega_chunk_texto, es_parcial=True, chunk_num=i + 1, total_chunks=len(mega_chunks)
                 )
-                if not mega_chunks:
-                    module_logger.critical("No se pudieron generar mega-chunks. Verifique la transcripción y configuración.")
-                    return
-
-                module_logger.info(f"Transcripción dividida en {len(mega_chunks)} mega-chunks para la generación de esquemas parciales.")
-                esquemas_parciales = []
-                for i, mega_chunk_texto in enumerate(mega_chunks):
-                    module_logger.info(f"  Procesando mega-chunk {i+1}/{len(mega_chunks)} ({len(mega_chunk_texto.split())} palabras)")
-                    esquema_parcial = llm_processing.generar_esquema_de_texto(
-                        mega_chunk_texto, es_parcial=True, chunk_num=i + 1, total_chunks=len(mega_chunks)
-                    )
-                    if esquema_parcial:
-                        esquemas_parciales.append(esquema_parcial)
-                    else:
-                        module_logger.warning(f"El esquema parcial para el mega-chunk {i+1} fue vacío o nulo.")
-                
-                if not esquemas_parciales:
-                    module_logger.critical("No se pudieron generar esquemas parciales válidos. No se puede continuar.")
-                    return
-                
-                module_logger.info(f"Se generaron {len(esquemas_parciales)} esquemas parciales válidos. Procediendo a fusionarlos.")
-                esquema_final_texto = llm_processing.fusionar_esquemas(esquemas_parciales)
+                if esquema_parcial:
+                    esquemas_parciales.append(esquema_parcial)
+                else:
+                    module_logger.warning(f"El esquema parcial para el mega-chunk {i+1} fue vacío o nulo.")
             
-            if esquema_final_texto:
-                utils.guardar_texto_a_archivo(esquema_final_texto, config.OUTPUT_ESQUEMA_PATH, "esquema de la clase")
-            else:
-                module_logger.critical("Falló la generación del esquema final.")
+            if not esquemas_parciales:
+                module_logger.critical("No se pudieron generar esquemas parciales válidos. No se puede continuar.")
                 return
+            
+            module_logger.info(f"Se generaron {len(esquemas_parciales)} esquemas parciales válidos. Procediendo a fusionarlos.")
+            esquema_final_texto = llm_processing.fusionar_esquemas(esquemas_parciales)
+        
+        if esquema_final_texto:
+            utils.guardar_texto_a_archivo(esquema_final_texto, config.OUTPUT_ESQUEMA_PATH, "esquema de la clase")
+        else:
+            module_logger.critical("Falló la generación del esquema final.") # Este log ya existía, se mantiene
+            return # Asegurar que salimos si falla la generación
 
-    if not esquema_final_texto or not esquema_final_texto.strip():
-        module_logger.critical("No hay esquema disponible (ni cargado ni generado válidamente). Saliendo.")
+    if not esquema_final_texto or not esquema_final_texto.strip(): # Este chequeo sigue siendo útil por si la generación falla y devuelve None/vacío
+        module_logger.critical("No hay esquema disponible (falló la generación). Saliendo.")
         return
 
     module_logger.info("--- PROCESO DE GENERACIÓN DE ESQUEMA TERMINADO ---")
