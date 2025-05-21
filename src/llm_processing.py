@@ -9,31 +9,45 @@ from src import prompts
 logger = logging.getLogger(__name__)
 llm_instance = None # Esta será la instancia global del modelo cargado
 
-def cargar_modelo_llm():
+def cargar_modelo_llm(use_cpu_only=False): # <--- Añadir parámetro use_cpu_only
     global llm_instance
     if llm_instance is not None:
         logger.info("Modelo LLM ya está cargado.")
-        return llm_instance # Devuelve la instancia existente
+        return llm_instance
 
     logger.info(f"Cargando modelo desde: {config.MODEL_PATH}")
     if not os.path.exists(config.MODEL_PATH):
         logger.critical(f"No se encontró el archivo del modelo en {config.MODEL_PATH}")
         return None
+
+    n_gpu_layers_to_use = config.N_GPU_LAYERS
+    if use_cpu_only:
+        logger.info("Forzando uso de CPU: n_gpu_layers se establecerá en 0.")
+        n_gpu_layers_to_use = 0
+    else:
+        logger.info(f"Usando n_gpu_layers de configuración: {config.N_GPU_LAYERS}")
+        
     try:
         start_time_carga = time.time()
-        # Asignar a la variable global para que otros módulos puedan acceder a ella
         llm_instance = Llama(
             model_path=config.MODEL_PATH,
             n_ctx=config.CONTEXT_SIZE,
             n_threads=config.N_THREADS,
-            n_gpu_layers=config.N_GPU_LAYERS,
+            n_gpu_layers=n_gpu_layers_to_use, # <--- Usar la variable ajustada
             n_batch=config.N_BATCH_LLAMA,
             verbose=config.LLM_VERBOSE,
-            seed=42, # Para reproducibilidad,
+            seed=42, 
         )
         end_time_carga = time.time()
         logger.info(f"Modelo LLM cargado exitosamente en {end_time_carga - start_time_carga:.2f} segundos.")
-        return llm_instance # Devolver la instancia también
+        if use_cpu_only:
+            logger.info("Modelo cargado en modo CPU (n_gpu_layers=0).")
+        elif n_gpu_layers_to_use > 0 :
+             logger.info(f"Modelo cargado con {n_gpu_layers_to_use} capas en GPU.")
+        else: # n_gpu_layers_to_use es 0 (o negativo si config.N_GPU_LAYERS era negativo y no se forzó CPU)
+             logger.info(f"Modelo cargado con {n_gpu_layers_to_use} capas en GPU (podría ser CPU si es 0 o negativo y no hay GPU).")
+
+        return llm_instance
     except Exception as e:
         logger.critical(f"Al cargar el modelo LLM: {e}", exc_info=True)
         logger.info("Posibles causas: CONTEXT_SIZE, archivo corrupto, Llama.cpp sin soporte GPU.")
@@ -45,10 +59,8 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
         logger.critical(f"Modelo LLM no cargado. No se puede procesar '{descripcion_tarea}'.")
         return None, "llm_not_loaded", {}
 
-    # Contar tokens del prompt real para logging y posible advertencia
     num_tokens_prompt_reales = 0
     try:
-        # Asegurarse de que llm_instance esté disponible para tokenizar
         if llm_instance:
             num_tokens_prompt_reales = len(llm_instance.tokenize(prompt_texto.encode('utf-8', 'ignore')))
         else:
@@ -59,9 +71,6 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
     logger.info(f"Enviando prompt al LLM para '{descripcion_tarea}' (~{num_tokens_prompt_reales} tokens), "
                 f"max_tokens_out: {max_tokens_salida}, temp: {temperatura}.")
 
-    # Advertencia si el prompt real + salida excede el contexto
-    # Usamos un factor de seguridad un poco menor aquí (ej. 0.98) porque es una verificación final
-    # y num_tokens_prompt_reales es ahora más preciso.
     if num_tokens_prompt_reales > 0 and \
        (num_tokens_prompt_reales + max_tokens_salida) > config.CONTEXT_SIZE * 0.98:
         logger.warning(f"El prompt actual ({num_tokens_prompt_reales} tokens) + salida ({max_tokens_salida}) "
@@ -77,7 +86,8 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
             max_tokens=max_tokens_salida,
             stop=stop_sequences,
             echo=False,
-            temperature=temperatura
+            temperature=temperatura,
+            seed=42
         )
         
         end_time_llm = time.time()
@@ -86,7 +96,7 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
         texto_generado = ""
         finish_reason = "desconocido"
         tokens_generados = 0
-        tokens_prompt_from_usage = 0 # Tokens del prompt según 'usage'
+        tokens_prompt_from_usage = 0
 
         if output and 'choices' in output and len(output['choices']) > 0:
             texto_generado = output['choices'][0]['text'].strip()
@@ -105,20 +115,17 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
         
         else:
             logger.warning(f"La salida del LLM para '{descripcion_tarea}' fue inesperada o vacía. Output: {output}")
-            # Usar el conteo pre-calculado si la salida es vacía
             return None, "empty_or_invalid_llm_output", {"tokens_prompt": num_tokens_prompt_reales}
 
-        # Determinar el conteo final de tokens del prompt para stats
-        # Priorizar 'usage', luego el pre-cálculo, luego un nuevo intento de tokenizar si todo es 0
         final_tokens_prompt_stat = tokens_prompt_from_usage
         if final_tokens_prompt_stat == 0:
             if num_tokens_prompt_reales > 0:
                 final_tokens_prompt_stat = num_tokens_prompt_reales
-            elif llm_instance: # Si ambos son 0, intentar tokenizar de nuevo como último recurso
+            elif llm_instance: 
                 try:
                     final_tokens_prompt_stat = len(llm_instance.tokenize(prompt_texto.encode('utf-8', 'ignore')))
                 except Exception:
-                    pass # Mantener 0 si falla
+                    pass 
 
         tokens_por_segundo = 0
         if processing_time > 0 and tokens_generados > 0:
@@ -147,7 +154,6 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
 
     except Exception as e:
         logger.error(f"Durante la llamada al LLM para '{descripcion_tarea}': {e}", exc_info=True)
-        # Devolver el conteo pre-calculado de tokens del prompt si está disponible
         return None, f"exception_during_llm_call: {str(e)}", {"tokens_prompt": num_tokens_prompt_reales}
 
 
@@ -163,7 +169,7 @@ def generar_esquema_de_texto(texto_para_esquema, es_parcial=False, chunk_num=Non
             total_chunks=total_chunks
         )
         max_tokens_para_este_esquema = config.MAX_TOKENS_ESQUEMA_PARCIAL
-    else: # Pase único, transcripción completa
+    else: 
         prompt_final_esquema = prompts.PROMPT_GENERAR_ESQUEMA_TEMPLATE.format(
             texto_completo=texto_para_esquema
         )
@@ -172,12 +178,10 @@ def generar_esquema_de_texto(texto_para_esquema, es_parcial=False, chunk_num=Non
     
     logger.info(f"Iniciando Generación de {descripcion_proceso_base}")
     
-    prompt_final_esquema = prompts.PROMPT_GENERAR_ESQUEMA_TEMPLATE.format(texto_completo=texto_para_esquema)
-    max_tokens_para_este_esquema = config.MAX_TOKENS_ESQUEMA_PARCIAL if es_parcial else config.MAX_TOKENS_ESQUEMA_FUSIONADO
+    # Esta línea estaba duplicada y usaba el template incorrecto para el caso parcial.
+    # prompt_final_esquema = prompts.PROMPT_GENERAR_ESQUEMA_TEMPLATE.format(texto_completo=texto_para_esquema)
+    # max_tokens_para_este_esquema = config.MAX_TOKENS_ESQUEMA_PARCIAL if es_parcial else config.MAX_TOKENS_ESQUEMA_FUSIONADO
     
-    # Ya no se hacen estimaciones de tokens de prompt aquí basadas en factor.
-    # _llamar_al_llm ahora maneja un conteo más preciso y las advertencias.
-
     esquema_generado, _, _ = _llamar_al_llm(
         prompt_texto=prompt_final_esquema,
         max_tokens_salida=max_tokens_para_este_esquema,
@@ -202,8 +206,6 @@ def fusionar_esquemas(lista_esquemas_parciales):
     
     prompt_final_fusion = prompts.PROMPT_FUSIONAR_ESQUEMAS_TEMPLATE.format(texto_esquemas_parciales=texto_esquemas_concatenados)
     
-    # Ya no se hacen estimaciones de tokens de prompt aquí basadas en factor.
-
     esquema_fusionado, _, _ = _llamar_al_llm(
         prompt_texto=prompt_final_fusion,
         max_tokens_salida=config.MAX_TOKENS_ESQUEMA_FUSIONADO,

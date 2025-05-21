@@ -1,11 +1,12 @@
 # src/main.py
 import time
 import os
-import logging # <--- Importar logging
+import logging
+import argparse
 from src import config
 from src import utils
 from src import llm_processing
-from src import prompts # prompts es usado por llm_processing
+from src import prompts
 
 # --- Configuración del Logging ---
 LOG_LEVEL = logging.INFO
@@ -23,13 +24,26 @@ logging.basicConfig(
 module_logger = logging.getLogger(__name__)
 
 def main():
+    # --- Parse command line arguments ---
+    parser = argparse.ArgumentParser(description="Generador de esquemas a partir de transcripciones.")
+    parser.add_argument(
+        "--cpu",
+        action="store_true", # Si está presente, args.cpu será True
+        help="Forzar el uso de CPU para el modelo LLM, ignorando N_GPU_LAYERS de la configuración."
+    )
+    args = parser.parse_args()
+
     script_start_time = time.time()
     module_logger.info("--- INICIO DEL PROCESO DE GENERACIÓN DE ESQUEMA ---")
+    if args.cpu:
+        module_logger.info("Opción --cpu especificada: Se forzará el uso de CPU para el LLM.")
+    else:
+        module_logger.info("Opción --cpu no especificada: Se usará la configuración de GPU por defecto.")
 
     with utils.timed_phase("Inicialización y Carga de Modelo"):
         utils.crear_directorios_necesarios()
-        # La función cargar_modelo_llm ahora asigna a llm_processing.llm_instance
-        llm_processing.cargar_modelo_llm() 
+        # Pasar el argumento args.cpu a cargar_modelo_llm
+        llm_processing.cargar_modelo_llm(use_cpu_only=args.cpu) 
         if llm_processing.llm_instance is None:
             module_logger.critical("No se pudo cargar el modelo LLM o la instancia no está disponible. Saliendo.")
             return
@@ -42,7 +56,6 @@ def main():
             return
         
         num_palabras_total_leidas = len(texto_completo_transcripcion.split())
-        # Eliminado el log de tokens estimados por factor, ya que ahora usamos conteo real.
         module_logger.info(f"Transcripción leída: {num_palabras_total_leidas} palabras.")
 
 
@@ -57,7 +70,7 @@ def main():
             module_logger.info(f"Tokens reales del prompt base (sin contenido): {num_tokens_prompt_base}")
         except Exception as e:
             module_logger.critical(f"Error CRÍTICO al tokenizar el prompt base: {e}. No se puede continuar.", exc_info=True)
-            return # Terminar si no podemos obtener este conteo esencial
+            return
 
         try:
             tokens_contenido_transcripcion = llm_processing.llm_instance.tokenize(texto_completo_transcripcion.encode('utf-8', 'ignore'))
@@ -65,7 +78,7 @@ def main():
             module_logger.info(f"Tokens reales del contenido de la transcripción: {num_tokens_contenido_transcripcion}")
         except Exception as e:
             module_logger.critical(f"Error CRÍTICO al tokenizar el contenido de la transcripción: {e}. No se puede continuar.", exc_info=True)
-            return # Terminar si no podemos obtener este conteo esencial
+            return
 
 
     esquema_final_texto = None
@@ -115,13 +128,13 @@ def main():
             esquemas_parciales = []
             for i, mega_chunk_texto in enumerate(mega_chunks):
                 palabras_chunk_actual = len(mega_chunk_texto.split())
-                tokens_chunk_actual_reales = 0 # Inicializar
+                tokens_chunk_actual_reales = 0 
                 try:
-                    if llm_processing.llm_instance: # Asegurarse de que la instancia existe
+                    if llm_processing.llm_instance: 
                         tokens_chunk_actual_reales = len(llm_processing.llm_instance.tokenize(mega_chunk_texto.encode('utf-8','ignore')))
                 except Exception as e_tok_chunk:
                     module_logger.warning(f"No se pudo tokenizar el mega-chunk {i+1} para logging: {e_tok_chunk}")
-                    tokens_chunk_actual_reales = "N/A" # Indicar que no se pudo calcular
+                    tokens_chunk_actual_reales = "N/A" 
 
                 module_logger.info(f"  Procesando mega-chunk {i+1}/{len(mega_chunks)} ({palabras_chunk_actual} palabras, ~{tokens_chunk_actual_reales} tokens).")
                 esquema_parcial = llm_processing.generar_esquema_de_texto(

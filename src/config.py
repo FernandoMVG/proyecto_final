@@ -6,11 +6,11 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_PROJECT_DIR = os.path.join(SCRIPT_DIR, "..")
 
 # --- Configuración del Modelo y Rutas ---
-MODEL_FILENAME = "mistral-7b-instruct-v0.2.Q2_K.gguf" 
+MODEL_FILENAME = "mistral-7b-instruct-v0.2.Q4_K_M.gguf" 
 MODEL_PATH = os.path.join(BASE_PROJECT_DIR, "models", MODEL_FILENAME)
 INPUT_FILE_NAME = "transcripcion_ejemplo.txt"
 INPUT_FILE_PATH = os.path.join(BASE_PROJECT_DIR, "data", INPUT_FILE_NAME)
-OUTPUT_ESQUEMA_FILENAME = "esquema_clase.txt"
+OUTPUT_ESQUEMA_FILENAME = "esquema_clase_2.Q4_K_M.txt"
 OUTPUT_ESQUEMA_PATH = os.path.join(BASE_PROJECT_DIR, "output", OUTPUT_ESQUEMA_FILENAME)
 TEMPLATE_TRANSCRIPCION_FILENAME = "ejemplo_transcripcion_template.txt"
 TEMPLATE_TRANSCRIPCION_PATH = os.path.join(BASE_PROJECT_DIR, "templates", TEMPLATE_TRANSCRIPCION_FILENAME) 
@@ -24,7 +24,7 @@ N_THREADS = None     # None para que Llama.cpp decida (usualmente óptimo)
 LLM_VERBOSE = False
 LLM_TEMPERATURE_ESQUEMA = 0.3
 LLM_TEMPERATURE_FUSION = 0.2
-N_BATCH_LLAMA = 1024 # o 512. Asegurar que esté definido.
+N_BATCH_LLAMA = 512
 
 # --- Configuración del Mega-Chunking (para generación de esquema si es necesario) ---
 MEGA_CHUNK_CONTEXT_FACTOR = 0.7
