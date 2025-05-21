@@ -5,6 +5,7 @@
 __pycache__/
 *.pyc
 *.pyo
+*.pyd # Añadido por si acaso, son como DLLs de Python en Windows
 
 # Archivos de VS Code
 .vscode/
@@ -13,11 +14,26 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Archivos de modelos LLM grandes (si los descargas aquí)
-models/*.gguf 
-# ¡Cuidado si los modelos son muy grandes para tu repo Git!
-# Podrías querer descargarlos fuera del repo o usar Git LFS
+# Archivos de modelos LLM grandes
+# Ignorar todo dentro de la carpeta 'models/'
+models/*
+# Pero NO ignorar el archivo .gitkeep dentro de 'models/' para que la carpeta se rastree
+!models/.gitkeep
 
-# Archivos de salida (opcional, si no quieres versionarlos)
-output/
-data/  
+# Archivos de salida
+# Ignorar todo dentro de la carpeta 'output/'
+output/*
+# Pero NO ignorar el archivo .gitkeep dentro de 'output/' para que la carpeta se rastree
+!output/.gitkeep
+
+# Archivos de datos de entrada
+# Ignorar todo dentro de la carpeta 'data/'
+data/*
+# Pero NO ignorar el archivo .gitkeep dentro de 'data/' para que la carpeta se rastree
+!data/.gitkeep
+
+# Archivos de log (si los generas y no quieres versionarlos)
+*.log
+
+# Archivos .env (para variables de entorno, nunca deben subirse)
+.env
