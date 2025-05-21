@@ -28,7 +28,8 @@ def cargar_modelo_llm():
             n_threads=config.N_THREADS,
             n_gpu_layers=config.N_GPU_LAYERS,
             n_batch=config.N_BATCH_LLAMA,
-            verbose=config.LLM_VERBOSE
+            verbose=config.LLM_VERBOSE,
+            seed=42, # Para reproducibilidad,
         )
         end_time_carga = time.time()
         logger.info(f"Modelo LLM cargado exitosamente en {end_time_carga - start_time_carga:.2f} segundos.")
