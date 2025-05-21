@@ -23,6 +23,18 @@ def timed_phase(phase_name):
     duration = time.time() - start_time
     logger.info(f"--- Fin Fase: {phase_name} (Duración: {format_duration(duration)}) ---")
 
+def _leer_contenido_template(template_path):
+    """Función helper para leer el contenido del archivo template."""
+    try:
+        with open(template_path, 'r', encoding='utf-8') as f_template:
+            return f_template.read()
+    except FileNotFoundError:
+        logger.error(f"Archivo template no encontrado en: {template_path}")
+        return None
+    except Exception as e_template:
+        logger.error(f"Error al leer el archivo template '{template_path}': {e_template}", exc_info=True)
+        return None
+
 def leer_archivo(ruta_archivo):
     logger.debug(f"Intentando leer archivo: {ruta_archivo}")
     try:
@@ -32,31 +44,32 @@ def leer_archivo(ruta_archivo):
             return content
     except FileNotFoundError:
         logger.error(f"Archivo no encontrado en {ruta_archivo}")
+        # Solo intentar crear si es el archivo de entrada principal el que falta
         if ruta_archivo == config.INPUT_FILE_PATH:
-            logger.info(f"Creando un archivo de ejemplo '{config.INPUT_FILE_NAME}' en la carpeta 'data'. Por favor, edítalo.")
-            ejemplo_txt = """Este es un texto de ejemplo para la transcripción de la clase de Optimización.
-La Programación Lineal es una técnica matemática utilizada para encontrar la mejor solución posible (óptima) 
-en un modelo matemático cuyos requisitos están representados por relaciones lineales. 
-Se utiliza ampliamente en investigación de operaciones.
-Un estudiante pregunta sobre la diferencia entre variables continuas y discretas. El profesor explica brevemente.
-Luego, el profesor divaga un momento sobre el clima antes de retomar el tema del método Simplex.
-El método Simplex es un algoritmo popular para resolver problemas de programación lineal.
-Se discuten los conceptos de variables básicas y no básicas, y cómo se itera para encontrar la solución óptima.
-Se presenta un ejemplo simple de un problema de maximización de beneficios con dos variables y tres restricciones.
-El profesor enfatiza la importancia de entender las condiciones de optimalidad y factibilidad.
-"""
+            logger.info(f"Creando un archivo de ejemplo '{config.INPUT_FILE_NAME}' en la carpeta 'data' "
+                        f"usando el template de '{config.TEMPLATE_TRANSCRIPCION_PATH}'. Por favor, edítalo si es necesario.")
+            
+            ejemplo_txt = _leer_contenido_template(config.TEMPLATE_TRANSCRIPCION_PATH)
+
+            if ejemplo_txt is None:
+                logger.error("No se pudo leer el contenido del template. No se creará el archivo de ejemplo.")
+                return None # No se pudo obtener el contenido del template
+
             try:
+                # Asegurar que el directorio 'data' exista
                 os.makedirs(os.path.dirname(config.INPUT_FILE_PATH), exist_ok=True)
-                with open(config.INPUT_FILE_PATH, 'w', encoding='utf-8') as f:
-                     f.write(ejemplo_txt)
-                logger.info(f"Archivo de ejemplo '{config.INPUT_FILE_NAME}' creado.")
-                return ejemplo_txt
+                # Escribir el contenido del template en el archivo de entrada esperado
+                with open(config.INPUT_FILE_PATH, 'w', encoding='utf-8') as f_output:
+                     f_output.write(ejemplo_txt)
+                logger.info(f"Archivo de ejemplo '{config.INPUT_FILE_NAME}' creado exitosamente en '{config.INPUT_FILE_PATH}'.")
+                return ejemplo_txt # Devolver el contenido del ejemplo recién creado
             except Exception as e_create:
-                logger.error(f"No se pudo crear el archivo de ejemplo: {e_create}", exc_info=True)
-        return None
+                logger.error(f"No se pudo crear el archivo de ejemplo en '{config.INPUT_FILE_PATH}': {e_create}", exc_info=True)
+        return None # Retornar None si no es el INPUT_FILE_PATH o si falla la creación
     except Exception as e:
-        logger.error(f"Al leer el archivo {ruta_archivo}: {e}", exc_info=True)
+        logger.error(f"Error inesperado al leer el archivo '{ruta_archivo}': {e}", exc_info=True)
         return None
+
 
 def guardar_texto_a_archivo(texto_generado, ruta_archivo, descripcion_archivo="archivo"):
     if texto_generado:

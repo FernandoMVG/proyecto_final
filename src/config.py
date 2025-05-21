@@ -12,7 +12,8 @@ INPUT_FILE_NAME = "transcripcion_ejemplo.txt"
 INPUT_FILE_PATH = os.path.join(BASE_PROJECT_DIR, "data", INPUT_FILE_NAME)
 OUTPUT_ESQUEMA_FILENAME = "esquema_clase.txt"
 OUTPUT_ESQUEMA_PATH = os.path.join(BASE_PROJECT_DIR, "output", OUTPUT_ESQUEMA_FILENAME)
-
+TEMPLATE_TRANSCRIPCION_FILENAME = "ejemplo_transcripcion_template.txt"
+TEMPLATE_TRANSCRIPCION_PATH = os.path.join(BASE_PROJECT_DIR, "templates", TEMPLATE_TRANSCRIPCION_FILENAME) 
 
 # --- Configuración del LLM ---
 CONTEXT_SIZE = 8192 #16384
