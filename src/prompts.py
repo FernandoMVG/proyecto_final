@@ -91,7 +91,7 @@ ESQUEMA MAESTRO FUSIONADO, COHERENTE Y COMPLETO (comienza con 1. y sigue estrict
 """
 
 PROMPT_GENERAR_APUNTES_POR_SECCION_TEMPLATE = """Eres un asistente experto en redacción académica y creación de material de estudio detallado.
-Tu tarea es generar apuntes de clase en formato Markdown para UNA SECCIÓN ESPECÍFICA del esquema de una clase, utilizando la transcripción completa de la clase como referencia principal.
+Tu tarea es generar apuntes EN ESPAÑOL de clase en formato Markdown para UNA SECCIÓN ESPECÍFICA del esquema de una clase, utilizando la transcripción completa de la clase como referencia principal.
 
 --- ENTRADAS ---
 1.  **SECCIÓN DEL ESQUEMA A DESARROLLAR:**

@@ -206,18 +206,19 @@ async def generar_esquema_endpoint(
 async def generar_apuntes_endpoint(
     background_tasks: BackgroundTasks,
     transcripcion_file: UploadFile = File(..., description="Archivo de transcripción original (.txt)"),
-    esquema_texto: str = Form(..., description="Texto completo del esquema generado previamente."),
+    esquema_file: UploadFile = File(..., description="Archivo de esquema generado previamente (.txt)"),
     usar_cpu: bool = Query(False, description="Forzar el uso de CPU para esta solicitud.")
 ):
     request_start_time = time.time()
     original_transcripcion_filename = transcripcion_file.filename
-    api_logger.info(f"Solicitud para generar apuntes basada en esquema para: {original_transcripcion_filename}")
+    original_esquema_filename = esquema_file.filename
+    api_logger.info(f"Solicitud para generar apuntes basada en esquema para: {original_transcripcion_filename} y esquema: {original_esquema_filename}")
 
     # Similar manejo de CPU que en el endpoint de esquema
     if usar_cpu and not llm_processing.llm_instance.model_params.n_gpu_layers == 0:
         api_logger.warning("Se solicitó CPU, pero el modelo ya está cargado con GPU. Usando GPU.")
         # Lógica de recarga iría aquí
-    
+
     if llm_processing.llm_instance is None:
         api_logger.error("Modelo LLM no está disponible.")
         raise HTTPException(status_code=503, detail="Servicio no disponible: Modelo LLM no cargado.")
@@ -229,8 +230,15 @@ async def generar_apuntes_endpoint(
         api_logger.error(f"Error al leer/decodificar archivo de transcripción '{original_transcripcion_filename}': {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Error al procesar archivo de transcripción: {e}")
 
+    try:
+        contenido_bytes_esquema = await esquema_file.read()
+        esquema_texto = contenido_bytes_esquema.decode("utf-8")
+    except Exception as e:
+        api_logger.error(f"Error al leer/decodificar archivo de esquema '{original_esquema_filename}': {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Error al procesar archivo de esquema: {e}")
+
     if not esquema_texto or not esquema_texto.strip():
-        raise HTTPException(status_code=400, detail="El texto del esquema no puede estar vacío.")
+        raise HTTPException(status_code=400, detail="El archivo de esquema no puede estar vacío.")
 
     # --- Lógica de Generación de Apuntes ---
     apuntes_texto_final_md = None
@@ -238,7 +246,7 @@ async def generar_apuntes_endpoint(
         api_logger.info("Dividiendo el esquema en secciones para generar apuntes.")
         secciones_del_esquema = re.split(r"\n(?=\d+\.\s)", esquema_texto.strip())
         secciones_del_esquema = [s.strip() for s in secciones_del_esquema if s.strip()]
-        
+
         apuntes_completos_md_list = []
         if not secciones_del_esquema and esquema_texto.strip():
             apuntes_para_seccion_unica = llm_processing.generar_apuntes_por_seccion(
@@ -253,7 +261,7 @@ async def generar_apuntes_endpoint(
                 )
                 if apuntes_para_esta_seccion:
                     apuntes_completos_md_list.append(apuntes_para_esta_seccion.strip())
-        
+
         if apuntes_completos_md_list:
             nombre_base_salida = os.path.splitext(original_transcripcion_filename)[0]
             apuntes_texto_final_md = f"# Guía de Estudio Detallada: {nombre_base_salida}\n\n" + "\n\n".join(apuntes_completos_md_list)
@@ -280,7 +288,7 @@ async def generar_apuntes_endpoint(
         api_logger.info(f"Devolviendo archivo de apuntes: {nombre_base_salida}_apuntes.md")
         processing_time = round(time.time() - request_start_time, 2)
         api_logger.info(f"Tiempo total para generar apuntes de '{original_transcripcion_filename}': {processing_time} seg.")
-        
+
         return FileResponse(
             path=temp_file_path_apuntes,
             filename=f"{nombre_base_salida}_apuntes.md",
