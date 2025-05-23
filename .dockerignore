@@ -1,0 +1,30 @@
+# Ignorar control de versiones, entornos y archivos temporales
+.git/
+.gitignore
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Docker y documentación
+.dockerignore
+README.md
+
+# Archivos de configuración y logs
+.env
+*.log
+
+# Carpetas que deben estar vacías en el contenedor
+output/*
+!output/.gitkeep
+
+input/*
+!input/.gitkeep
+
+# IMPORTANTE: no ignorar models/ ni templates/
+# models/*      <-- ELIMINADO
+# templates/*   <-- ELIMINADO

@@ -1,0 +1,25 @@
+version: "3.9"
+services:
+  llama-app:
+    image: modulo_llm 
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: contenedor_modulo_llm
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./models:/app/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    environment:
+      - LOG_LEVEL=INFO
+      - N_GPU_LAYERS=-1
+    # Si tu código espera otros archivos, agrega más volumenes aquí
+
+# Notas:
+# - Para que docker-compose detecte la GPU, necesitas Docker >= 19.03 y el NVIDIA Container Toolkit instalado.
+# - Si usas simplemente "docker compose up", usa el nombre de imagen que hayas construido o déjalo a build.
