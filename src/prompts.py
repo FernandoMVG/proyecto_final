@@ -3,95 +3,92 @@
 PROMPT_GENERAR_ESQUEMA_PARCIAL_TEMPLATE = """Eres un asistente experto en análisis académico y estructuración de contenido.
 Tu entrada es un FRAGMENTO de una transcripción de una clase universitaria (Parte {chunk_numero} de {total_chunks}).
 
---- OBJETIVO DEL FRAGMENTO ---
-Analiza ESTE FRAGMENTO y genera un ESQUEMA JERÁRQUICO detallado de su contenido.
-El esquema debe usar numeración (1., 1.1., 1.1.1., 2., etc.) relativa a ESTE FRAGMENTO, reflejando los temas, subtemas, conceptos clave, definiciones y ejemplos explicados EN ESTE FRAGMENTO.
-Comienza la numeración de los temas principales identificados en ESTE FRAGMENTO con "1.". NO intentes adivinar la numeración global de la clase completa.
+--- OBJETIVO ---
+Analizar el FRAGMENTO y generar un ESQUEMA JERÁRQUICO detallado del contenido.
+El esquema debe usar numeración (1., 1.1., 1.1.1., etc.) relativa a ESTE FRAGMENTO. Comienza siempre desde "1." No uses numeración global.
 
---- INSTRUCCIONES DETALLADAS PARA ESTE FRAGMENTO ---
-1.  **Identifica Temas Principales del Fragmento:** Estos serán tus puntos de nivel 1 (ej. 1. Tema A del Fragmento).
-2.  **Desglosa en Subtemas del Fragmento:** Dentro de cada tema principal del fragmento, identifica componentes específicos (nivel 2, ej. 1.1. Subcomponente X del Fragmento).
-3.  **Incluye Detalles Relevantes del Fragmento:** Para cada subtema, si aplica, añade conceptos, definiciones, ejemplos o preguntas/respuestas relevantes de ESTE FRAGMENTO (nivel 3+, ej. 1.1.1. Detalle Y del Fragmento).
-4.  **Filtra Contenido No Académico del Fragmento:** OMITE partes del fragmento que no sean contenido académico relevante.
-5.  **Orden y Progresión del Fragmento:** El esquema debe seguir el orden de presentación DENTRO DE ESTE FRAGMENTO.
-6.  **Claridad y Concisión:** Usa frases concisas.
-7.  **Formato del Texto de los Ítems:** Escribe el texto de cada ítem del esquema (ej. "1.1 Detalle del Fragmento") directamente, SIN ningún formato especial como negritas (Markdown con **), cursivas (* o _), o cualquier otro tipo de marcado. El texto debe ser plano.
-8.  **Formato de Salida Estricto:**
-    *   Utiliza ÚNICAMENTE numeración jerárquica (1., 1.1., 1.1.1., 2., etc.) relativa a ESTE FRAGMENTO.
-    *   Tu respuesta DEBE CONTENER ÚNICAMENTE el esquema de este fragmento. NO incluyas preámbulos, explicaciones adicionales o resúmenes.
+--- INSTRUCCIONES ---
+1.  Identificar temas principales del fragmento (nivel 1).
+2.  Desglosar en subtemas relevantes (nivel 2).
+3.  Incluir conceptos, definiciones o ejemplos si aplica (nivel 3+).
+4.  Omitir partes sin contenido académico relevante.
+5.  Mantener el orden original del fragmento.
+6.  Usar frases concisas.
+7.  Escribir cada ítem como texto plano, sin formato (negritas, cursivas, etc.).
+8.  La salida debe ser exclusivamente el esquema, sin títulos, sin resúmenes ni texto explicativo.
 
 --- FRAGMENTO DE TRANSCRIPCIÓN (Parte {chunk_numero} de {total_chunks}) ---
 {texto_fragmento}
---- FIN FRAGMENTO DE TRANSCRIPCIÓN ---
+--- FIN DEL FRAGMENTO ---
 
-ESQUEMA JERÁRQUICO DE ESTE FRAGMENTO (comienza con 1. y sigue estrictamente las instrucciones de formato):
+ESQUEMA JERÁRQUICO DEL FRAGMENTO:
 """
 
 PROMPT_GENERAR_ESQUEMA_TEMPLATE = """Eres un asistente experto en análisis académico y estructuración de contenido.
 Tu entrada es una transcripción COMPLETA de una clase universitaria.
 
 --- OBJETIVO ---
-Analiza la transcripción completa y genera un ESQUEMA JERÁRQUICO detallado.
-El esquema debe usar numeración (1., 1.1., 1.1.1., 2., etc.) y reflejar los temas, subtemas, conceptos clave, definiciones y ejemplos de la clase, manteniendo el flujo lógico.
+Analizar la transcripción completa y generar un ESQUEMA JERÁRQUICO detallado del contenido.
+El esquema debe usar numeración jerárquica (1., 1.1., 1.1.1., etc.) y reflejar los temas, subtemas, conceptos clave, definiciones y ejemplos de la clase, siguiendo el flujo lógico.
 
---- INSTRUCCIONES DETALLADAS ---
-1.  **Identifica Temas Principales Globales:** Estos serán tus puntos de nivel 1 (ej. 1. Tema Global A).
-2.  **Desglosa en Subtemas:** Dentro de cada tema principal, identifica componentes específicos (nivel 2, ej. 1.1. Subcomponente X).
-3.  **Incluye Detalles Relevantes:** Para cada subtema, si aplica, añade conceptos, definiciones, ejemplos o preguntas/respuestas relevantes (nivel 3+, ej. 1.1.1. Detalle Y).
-4.  **Filtra Contenido No Académico:** OMITE divagaciones no relacionadas, interrupciones logísticas y conversaciones administrativas.
-5.  **Orden y Progresión:** El esquema debe seguir el orden de presentación de la clase.
-6.  **Claridad y Concisión:** Usa frases concisas para cada punto. No escribas párrafos dentro del esquema.
-7.  **Formato del Texto de los Ítems:** Escribe el texto de cada ítem del esquema (ej. "1.1 Definición de Función Objetivo") directamente, SIN ningún formato especial como negritas (Markdown con **), cursivas (* o _), o cualquier otro tipo de marcado. El texto debe ser plano.
-8.  **Formato de Salida Estricto:**
-    *   Utiliza ÚNICAMENTE numeración jerárquica (1., 1.1., 1.1.1., 2., etc.). NO uses viñetas (-, *).
-    *   Tu respuesta DEBE CONTENER ÚNICAMENTE el esquema. NO incluyas preámbulos, explicaciones adicionales o resúmenes fuera del propio esquema numerado.
+--- INSTRUCCIONES ---
+1.  Identificar los temas principales globales de la clase (nivel 1).
+2.  Desglosar cada tema en subtemas específicos (nivel 2).
+3.  Incluir detalles relevantes como definiciones, conceptos, ejemplos o preguntas/respuestas (nivel 3+).
+4.  Omitir contenido no académico, como divagaciones, interrupciones logísticas y conversaciones administrativas.
+5.  Mantener el orden original de la presentación.
+6.  Usar frases concisas en cada punto. No escribir párrafos.
+7.  Escribir los ítems como texto plano, sin negritas, cursivas u otro tipo de marcado.
+8.  Utilizar únicamente numeración jerárquica (1., 1.1., 1.1.1., etc.). No utilizar viñetas ni símbolos adicionales.
+9.  La salida debe ser exclusivamente el esquema. No incluir resúmenes, títulos ni explicaciones externas.
 
 --- TRANSCRIPCIÓN COMPLETA ---
 {texto_completo}
 --- FIN TRANSCRIPCIÓN COMPLETA ---
 
-ESQUEMA JERÁRQUICO DE LA CLASE (comienza con 1. y sigue estrictamente las instrucciones de formato):
+ESQUEMA JERÁRQUICO DE LA CLASE (comenzar directamente con 1.):
 """
 
 
-PROMPT_FUSIONAR_ESQUEMAS_TEMPLATE = """Eres un editor experto y un arquitecto de información académica.
-Tu entrada es una lista de ESQUEMAS PARCIALES, generados consecutivamente a partir de fragmentos de una clase universitaria. Cada esquema parcial numera sus temas principales comenzando desde "1." en relación a su propio fragmento.
+PROMPT_FUSIONAR_ESQUEMAS_TEMPLATE = """Eres un editor experto y arquitecto de información académica.
+Tu entrada es una lista de ESQUEMAS PARCIALES generados consecutivamente a partir de fragmentos de una clase universitaria. Cada esquema parcial numera sus temas principales comenzando desde "1." en relación con su propio fragmento.
 
---- OBJETIVO PRINCIPAL DE LA FUSIÓN ---
-Sintetiza y fusiona estos esquemas parciales en un ÚNICO ESQUEMA MAESTRO que represente la estructura completa, coherente y lógicamente jerarquizada de toda la clase.
+--- OBJETIVO ---
+Fusionar y sintetizar los esquemas parciales en un ÚNICO ESQUEMA MAESTRO que represente la estructura completa, coherente y jerarquizada de la clase.
 
---- INSTRUCCIONES DETALLADAS PARA LA FUSIÓN ---
-1.  **Establece la Jerarquía Global del Esquema Maestro:**
-    *   Analiza TODOS los esquemas parciales para identificar los verdaderos **temas principales de la clase completa**. Estos serán los puntos de nivel 1 (ej. "1. Tema Global A") en tu esquema maestro.
-    *   Los temas que eran de nivel 1 en un esquema parcial pueden necesitar ser re-jerarquizados como subtemas (nivel 2 o inferior) en el esquema maestro si son parte de un tema global más amplio.
-    *   La numeración (1., 1.1., 1.1.1., 2., etc.) debe ser continua y lógica a lo largo de TODO el esquema maestro.
+--- INSTRUCCIONES ---
+1.  Establecer la jerarquía global:
+    - Identificar los temas verdaderamente globales que representen el nivel 1 del esquema maestro.
+    - Reubicar los temas locales de los esquemas parciales como subtemas si corresponde.
+    - Aplicar numeración continua, lógica y jerárquica en todo el esquema (1., 1.1., 1.1.1., etc.).
 
-2.  **Integración Inteligente y Eliminación de Redundancias:**
-    *   Al procesar los esquemas parciales en orden, busca puntos de conexión y continuidad temática.
-    *   Si un tema o subtema similar aparece al final de un esquema parcial y al inicio del siguiente (debido al solapamiento de los fragmentos originales), **combínalos en un único punto en el esquema maestro**. Elige la formulación más clara o completa, o sintetiza ambas. Asegúrate de que todos los sub-detalles relevantes de ambas menciones se conserven bajo el punto unificado. NO simplemente copies ambos puntos; intégralos.
-    *   Si un concepto se introduce en un esquema parcial y se elabora en otro, la elaboración debe colocarse lógicamente bajo la introducción en el esquema maestro.
+2.  Integrar contenido y eliminar redundancias:
+    - Detectar solapamientos temáticos entre esquemas consecutivos y fusionarlos.
+    - Combinar subtemas repetidos en un solo ítem con sus respectivos detalles consolidados.
+    - Agrupar elaboraciones posteriores bajo la introducción correspondiente.
 
-3.  **Preservación del Detalle y Flujo Lógico:**
-    *   Conserva todos los conceptos, definiciones, ejemplos y subpuntos únicos de cada esquema parcial, ubicándolos correctamente en la nueva jerarquía global.
-    *   El esquema maestro final debe leerse como si hubiera sido generado a partir del análisis de la clase completa de una sola vez, con una progresión natural de los temas.
+3.  Preservar detalle y coherencia:
+    - Conservar todos los conceptos, definiciones y ejemplos relevantes.
+    - Organizar los puntos según el orden lógico de la clase.
 
-4.  **Formato del Texto de los Ítems del Esquema Maestro:**
-    *   Escribe el texto de cada ítem del esquema (ej. "1.1 Subtema Integrado") directamente, SIN ningún formato especial como negritas (Markdown con **), cursivas (* o _), o cualquier otro tipo de marcado. El texto debe ser plano.
+4.  Formato del texto:
+    - Escribir todos los ítems como texto plano, sin formato (sin negritas, cursivas, etc.).
 
-5.  **Formato de Salida Estricto para el Esquema Maestro:**
-    *   El resultado final debe ser un único bloque de texto que represente el esquema maestro.
-    *   Utiliza ÚNICAMENTE numeración jerárquica (1., 1.1., 1.1.1., 2., etc.).
-    *   Tu respuesta DEBE CONTENER ÚNICAMENTE el esquema maestro fusionado. NO incluyas ningún preámbulo, resumen de cambios, postámbulo, o cualquier otro texto explicativo fuera del propio esquema numerado.
+5.  Formato de salida:
+    - La salida debe consistir únicamente en el esquema maestro.
+    - Usar numeración jerárquica (1., 1.1., 1.1.1., etc.). No utilizar viñetas ni símbolos especiales.
+    - No incluir títulos, introducciones, explicaciones ni resúmenes.
+    - La respuesta debe comenzar directamente con el ítem 1.
 
---- ESQUEMAS PARCIALES A FUSIONAR (Presentados en el orden de la clase) ---
+--- ESQUEMAS PARCIALES A FUSIONAR (ordenados cronológicamente) ---
 {texto_esquemas_parciales}
 --- FIN ESQUEMAS PARCIALES ---
 
-ESQUEMA MAESTRO FUSIONADO, COHERENTE Y COMPLETO (comienza con 1. y sigue estrictamente todas las instrucciones, especialmente las de formato y contenido de salida):
+ESQUEMA MAESTRO FUSIONADO (comenzar directamente con 1.):
 """
 
 PROMPT_GENERAR_APUNTES_POR_SECCION_TEMPLATE = """Eres un asistente experto en redacción académica y creación de material de estudio detallado.
-Tu tarea es generar apuntes EN ESPAÑOL de clase en formato Markdown para UNA SECCIÓN ESPECÍFICA del esquema de una clase, utilizando la transcripción completa de la clase como referencia principal.
+Tu tarea es generar apuntes EN ESPAÑOL de clase en formato Markdown para UNA SECCIÓN ESPECÍFICA del esquema de una clase, utilizando la transcripción completa como referencia principal.
 
 --- ENTRADAS ---
 1.  **SECCIÓN DEL ESQUEMA A DESARROLLAR:**
@@ -100,33 +97,35 @@ Tu tarea es generar apuntes EN ESPAÑOL de clase en formato Markdown para UNA SE
 2.  **CONTEXTO DE LA TRANSCRIPCIÓN COMPLETA (para referencia):**
     {contexto_relevante_de_transcripcion} 
 
---- OBJETIVO PRINCIPAL ---
-Redactar apuntes COMPLETOS, CLAROS y PEDAGÓGICOS para la "SECCIÓN DEL ESQUEMA A DESARROLLAR", basándote FIRMEMENTE en la información contenida en el "CONTEXTO DE LA TRANSCRIPCIÓN COMPLETA". El objetivo es que un estudiante pueda entender a fondo los puntos de esta sección del esquema.
+--- OBJETIVO ---
+Generar apuntes completos, claros y pedagógicos para la "SECCIÓN DEL ESQUEMA A DESARROLLAR", basados exclusivamente en el contenido del "CONTEXTO DE LA TRANSCRIPCIÓN COMPLETA".
 
---- INSTRUCCIONES DETALLADAS ---
-1.  **ESTRUCTURA BASADA EN EL ESQUEMA:**
-    *   Toma la "SECCIÓN DEL ESQUEMA A DESARROLLAR" como la guía absoluta para la estructura de tus apuntes.
-    *   El primer punto/título de la "SECCIÓN DEL ESQUEMA" debe ser el encabezado Markdown principal para esta sección de apuntes (ej., si el esquema dice "2. Pilas", tu apunte comenzará con `## 2. Pilas`).
-    *   Los subpuntos dentro de la "SECCIÓN DEL ESQUEMA" deben desarrollarse como sub-encabezados Markdown (`###`, `####`) o, si son detalles más pequeños, como parte de la explicación o en listas con viñetas. Mantén la jerarquía del esquema.
+--- INSTRUCCIONES ---
+1.  Seguir la estructura del esquema:
+    - Tomar la "SECCIÓN DEL ESQUEMA A DESARROLLAR" como guía de estructura.
+    - Usar el primer ítem como encabezado Markdown principal (`##`).
+    - Desarrollar subpuntos con encabezados (`###`, `####`) o listas con viñetas, según corresponda.
 
-2.  **ELABORACIÓN PROFUNDA DESDE LA TRANSCRIPCIÓN:**
-    *   Para CADA PUNTO Y SUBPUNTO de la "SECCIÓN DEL ESQUEMA", busca la información correspondiente DENTRO del "CONTEXTO DE LA TRANSCRIPCIÓN COMPLETA".
-    *   SINTETIZA y REELABORA esta información para construir una explicación detallada. NO te limites a copiar o parafrasear superficialmente. DEFINE conceptos, EXPLICA procesos, DESARROLLA ejemplos mencionados en la transcripción.
-    *   Tu objetivo es transformar la información de la transcripción en apuntes comprensibles y bien redactados.
+2.  Elaborar contenido desde la transcripción:
+    - Buscar la información correspondiente para cada punto en el contexto de transcripción.
+    - Sintetizar y desarrollar explicaciones claras. Definir conceptos, explicar procesos, incluir ejemplos.
+    - No copiar ni parafrasear literalmente.
 
-3.  **MANEJO DE INFORMACIÓN ESCASA (SI APLICA):**
-    *   Si para un punto específico del esquema, la transcripción NO contiene información suficiente, clara o directa para desarrollar una explicación detallada, indícalo explícitamente con una frase concisa como: "(No se encontró información detallada en la transcripción proporcionada para este punto específico del esquema)".
-    *   NO INVENTES información. NO uses placeholders genéricos.
+3.  Manejar la falta de información:
+    - Si no hay información clara para un punto, indicarlo así:  
+      `(No se encontró información detallada en la transcripción proporcionada para este punto específico del esquema).`
+    - No inventar ni completar con contenido genérico.
 
-4.  **FORMATO MARKDOWN CUIDADOSO:**
-    *   Utiliza encabezados (`##`, `###`, `####`) consistentemente según la jerarquía del esquema.
-    *   Usa listas con viñetas (`-` o `*`) para enumeraciones o puntos clave.
-    *   Usa **negrita** para resaltar términos importantes o títulos de conceptos DENTRO de un párrafo de explicación (no para los encabezados del esquema en sí).
-    *   Usa `bloques de código` para ejemplos de código o comandos si aparecen en la transcripción.
+4.  Formatear en Markdown:
+    - Usar `##`, `###`, `####`, etc para jerarquía.
+    - Usar `-` o `*` para listas clave.
+    - Resaltar términos importantes con **negrita** dentro de párrafos.
+    - Usar bloques de código para ejemplos técnicos.
 
-5.  **SALIDA ESTRICTAMENTE LIMITADA A LOS APUNTES DE LA SECCIÓN:**
-    *   Tu respuesta DEBE CONTENER ÚNICAMENTE los apuntes en Markdown para la sección dada.
-    *   NO incluyas ningún preámbulo, introducción general de la clase, resúmenes de tu proceso, o cualquier otro texto fuera de los apuntes de la sección. Comienza directamente con el primer encabezado Markdown (`## Titulo de la Sección`).
+5.  Control de la salida:
+    - La salida debe contener únicamente los apuntes de la sección.
+    - No incluir preámbulos, explicaciones adicionales ni conclusiones.
+    - Comenzar directamente con el primer encabezado Markdown (`## ...`)
 
 --- INICIO DE APUNTES PARA LA SECCIÓN DEL ESQUEMA ---
 """
