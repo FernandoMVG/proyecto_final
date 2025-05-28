@@ -2,15 +2,13 @@
 import time
 import os
 import logging
-import re # Importar re para expresiones regulares
-import tempfile # Para archivos temporales
 from typing import Optional
+import re # Ensure re is imported
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, BackgroundTasks
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv # Importar load_dotenv
 import google.generativeai as genai # Importar Gemini SDK
-import requests # Para realizar peticiones HTTP
 
 # Importar módulos de tu proyecto
 from src import config
@@ -57,104 +55,6 @@ app = FastAPI(
 )
 
 # --- Funciones Helper para la API ---
-def _ensure_output_dir_exists():
-    """Asegura que el directorio de salida (para archivos temporales) exista."""
-    output_dir = os.path.join(config.BASE_PROJECT_DIR, "output")
-    if not os.path.exists(output_dir):
-        try:
-            os.makedirs(output_dir)
-            api_logger.info(f"Directorio de salida creado: {output_dir}")
-        except Exception as e:
-            api_logger.error(f"No se pudo crear el directorio de salida '{output_dir}': {e}", exc_info=True)
-            # Esto podría ser un error crítico para FileResponse si no se puede escribir.
-            # Considerar lanzar una excepción aquí si es necesario.
-
-def _cleanup_temp_file(path: str):
-    """Función para eliminar un archivo temporal en segundo plano."""
-    try:
-        if os.path.exists(path):
-            os.remove(path)
-            api_logger.info(f"Archivo temporal limpiado: {path}")
-    except Exception as e:
-        api_logger.warning(f"Error limpiando archivo temporal {path}: {e}")
-
-async def _query_vector_db(query: str, top_k: int = 3, page_start: Optional[int] = None, page_end: Optional[int] = None) -> list[dict]:
-    """
-    Consulta la base de datos vectorial para obtener información relevante.
-    """
-    params = {"q": query, "top_k": top_k}
-    if page_start is not None:
-        params["page_start"] = page_start
-    if page_end is not None:
-        params["page_end"] = page_end
-
-    try:
-        response = requests.get(f"{config.VECTOR_DB_BASE_URL}/query/", params=params)
-        response.raise_for_status()  # Lanza una excepción para códigos de error HTTP
-        return response.json().get("results", [])
-    except requests.exceptions.RequestException as e:
-        api_logger.error(f"Error al consultar la base de datos vectorial: {e}", exc_info=True)
-        # Podrías decidir si lanzar una HTTPException aquí o devolver una lista vacía
-        # y manejarlo en la función que llama. Por ahora, devolvemos lista vacía.
-        return []
-
-
-async def _extraer_y_consultar_terminos_esquema(
-    esquema_contenido: str, 
-    max_terminos_consulta: int = config.MAX_SCHEMA_TERMS_TO_QUERY if hasattr(config, 'MAX_SCHEMA_TERMS_TO_QUERY') else 3,
-    top_k_por_termino: int = config.VECTOR_DB_TOP_K_PER_TERM if hasattr(config, 'VECTOR_DB_TOP_K_PER_TERM') else 1
-) -> str:
-    """
-    Extrae términos clave del esquema, consulta la base de datos vectorial con ellos
-    y formatea los resultados para incluirlos en el prompt de Gemini.
-    """
-    api_logger.info(f"Extrayendo hasta {max_terminos_consulta} términos del esquema para consulta vectorial.")
-    lineas_esquema = esquema_contenido.splitlines()
-    terminos_extraidos = []
-    terminos_unicos_procesados = set()
-
-    for linea in lineas_esquema:
-        # Corregida la expresión regular para manejar correctamente los paréntesis y la numeración.
-        linea_limpia = re.sub(r"^\s*((\d+\.(?:\d+\.)*|[IVXLCDMivxlcdm]+\.|[a-zA-Z]\))\s*|#+\s*|\*\s*|-\s*|\+\s*)+", "", linea).strip()
-        
-        # Considerar solo líneas con suficiente contenido y que no sean solo espacios o números residuales
-        if len(linea_limpia) > 3 and not linea_limpia.isnumeric(): # Evitar líneas muy cortas o solo números
-            # Normalizar un poco (ej. minúsculas) para evitar duplicados por capitalización
-            termino_normalizado = linea_limpia.lower() 
-            if termino_normalizado not in terminos_unicos_procesados:
-                terminos_extraidos.append(linea_limpia) # Guardar el original para la consulta
-                terminos_unicos_procesados.add(termino_normalizado)
-        
-        if len(terminos_extraidos) >= max_terminos_consulta:
-            break
-    
-    if not terminos_extraidos:
-        api_logger.info("No se extrajeron términos significativos del esquema para consulta.")
-        return ""
-
-    api_logger.info(f"Términos extraídos para consulta: {terminos_extraidos}")
-    
-    informacion_contextual_acumulada = []
-    for termino in terminos_extraidos:
-        api_logger.info(f"Consultando base de datos vectorial para el término del esquema: \'{termino}\'")
-        resultados_vector_db = await _query_vector_db(query=termino, top_k=top_k_por_termino)
-        
-        if resultados_vector_db:
-            items_termino_actual = [f"Resultados para el término del esquema \\\"{termino}\\\":"]
-            for res in resultados_vector_db:
-                texto = res.get("text", "No text available")
-                cita = res.get("citation", "No citation available")
-                items_termino_actual.append(f"  - Texto: {texto}\\n    Cita: {cita}")
-            informacion_contextual_acumulada.append("\\n".join(items_termino_actual))
-        else:
-            api_logger.info(f"No se encontró información en la BD vectorial para el término: \'{termino}\'")
-
-    if not informacion_contextual_acumulada:
-        api_logger.info("No se obtuvo información de la base de datos vectorial para los términos extraídos del esquema.")
-        return ""
-
-    return "\\n\\n--- Información Adicional de la Base de Datos Vectorial (basada en el esquema) ---\\n" + "\\n\\n".join(informacion_contextual_acumulada)
-
 
 async def _call_gemini_api_with_schema_and_transcription(
     esquema_contenido: str, 
@@ -208,7 +108,7 @@ async def _call_gemini_api_with_schema_and_transcription(
 async def startup_event():
     api_logger.info("Iniciando API y cargando modelo LLM...")
     utils.crear_directorios_necesarios() # Asegura que data/ y output/ existan
-    _ensure_output_dir_exists() # Específicamente para archivos temporales de la API si se guardan ahí
+    # _ensure_output_dir_exists() # Específicamente para archivos temporales de la API si se guardan ahí
     
     # Cargar modelo con GPU por defecto al inicio. El flag --cpu se maneja por endpoint.
     llm_processing.cargar_modelo_llm(use_cpu_only=False) 
@@ -220,7 +120,7 @@ async def startup_event():
 # --- Endpoint para Generar Esquema ---
 @app.post("/generar_esquema/", response_class=FileResponse)
 async def generar_esquema_endpoint(
-    background_tasks: BackgroundTasks,
+    # background_tasks: BackgroundTasks, # Removed
     file: UploadFile = File(..., description="Archivo de transcripción en formato .txt"),
     usar_cpu: bool = Query(False, description="Forzar el uso de CPU para esta solicitud.")
 ):
@@ -234,11 +134,8 @@ async def generar_esquema_endpoint(
     # Una solución más robusta requeriría gestionar instancias de modelo separadas o recargas.
     if usar_cpu and not llm_processing.llm_instance.model_params.n_gpu_layers == 0:
         api_logger.warning("Se solicitó CPU, pero el modelo ya está cargado con GPU. Usando GPU.")
-        # Aquí iría la lógica de recarga si fuera necesaria y posible sin reiniciar la app.
-        # llm_processing.llm_instance = None # Forzar recarga
-        # llm_processing.cargar_modelo_llm(use_cpu_only=True)
     
-    if llm_processing.llm_instance is None: # Doble chequeo
+    if llm_processing.llm_instance is None:
         api_logger.error("Modelo LLM no está disponible.")
         raise HTTPException(status_code=503, detail="Servicio no disponible: Modelo LLM no cargado.")
 
@@ -246,10 +143,12 @@ async def generar_esquema_endpoint(
         contenido_bytes = await file.read()
         texto_completo_transcripcion = contenido_bytes.decode("utf-8")
     except Exception as e:
-        api_logger.error(f"Error al leer/decodificar archivo '{original_filename}': {e}", exc_info=True)
+        api_logger.error(f"Error al leer/decodificar archivo \'{original_filename}\': {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Error al procesar archivo: {e}")
+    finally:
+        await file.close()
 
-    api_logger.info(f"Transcripción '{original_filename}' leída: {len(texto_completo_transcripcion.split())} palabras.")
+    api_logger.info(f"Transcripción \'{original_filename}\' leída: {len(texto_completo_transcripcion.split())} palabras.")
 
     # --- Lógica de Generación de Esquema ---
     esquema_final_texto = None
@@ -281,7 +180,7 @@ async def generar_esquema_endpoint(
             mega_chunks = utils.dividir_en_mega_chunks(
                 texto_completo_transcripcion,
                 max_tokens_para_contenido_en_mega_chunk_individual,
-                config.MEGA_CHUNK_OVERLAP_TOKENS, # Cambiado de MEGA_CHUNK_OVERLAP_WORDS
+                config.MEGA_CHUNK_OVERLAP_TOKENS,
                 llm_tokenizer_instance=llm_processing.llm_instance
             )
             if not mega_chunks: raise HTTPException(status_code=500, detail="No se generaron mega-chunks.")
@@ -302,39 +201,42 @@ async def generar_esquema_endpoint(
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e_esquema:
-        api_logger.error(f"Error durante la generación del esquema para '{original_filename}': {e_esquema}", exc_info=True)
+        api_logger.error(f"Error durante la generación del esquema para \'{original_filename}\': {e_esquema}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno al generar el esquema: {str(e_esquema)}")
 
-    # Guardar en archivo temporal y devolver FileResponse
+    # Guardar en archivo permanente en la carpeta output
     nombre_base_salida = os.path.splitext(original_filename)[0]
-    
-    # Usar NamedTemporaryFile para manejo automático de la eliminación (con delete=False inicialmente)
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    output_filename = f"{nombre_base_salida}_esquema_local_{timestamp}.txt"
+    output_dir_path = os.path.join(config.BASE_PROJECT_DIR, "output")
+    permanent_file_path = os.path.join(output_dir_path, output_filename)
+
     try:
-        with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".txt", encoding="utf-8", dir=os.path.join(config.BASE_PROJECT_DIR, "output")) as tmp_file:
-            tmp_file.write(esquema_final_texto)
-            temp_file_path = tmp_file.name
-        api_logger.info(f"Esquema temporal para '{original_filename}' guardado en: {temp_file_path}")
+        utils._ensure_output_dir_exists() # Ensure output dir exists
+        with open(permanent_file_path, "w", encoding="utf-8") as f:
+            f.write(esquema_final_texto)
+        api_logger.info(f"Esquema para \'{original_filename}\' guardado permanentemente en: {permanent_file_path}")
         
-        background_tasks.add_task(_cleanup_temp_file, temp_file_path)
+        # background_tasks.add_task(utils._cleanup_temp_file, temp_file_path) # Removed
         
-        api_logger.info(f"Devolviendo archivo de esquema: {nombre_base_salida}_esquema.txt")
+        api_logger.info(f"Devolviendo archivo de esquema: {output_filename}")
         processing_time = round(time.time() - request_start_time, 2)
-        api_logger.info(f"Tiempo total para generar esquema de '{original_filename}': {processing_time} seg.")
+        api_logger.info(f"Tiempo total para generar esquema de \'{original_filename}\': {processing_time} seg.")
 
         return FileResponse(
-            path=temp_file_path,
-            filename=f"{nombre_base_salida}_esquema.txt",
+            path=permanent_file_path,
+            filename=output_filename,
             media_type='text/plain'
         )
     except Exception as e_file_resp:
-        api_logger.error(f"Error al preparar FileResponse para esquema de '{original_filename}': {e_file_resp}", exc_info=True)
+        api_logger.error(f"Error al preparar FileResponse para esquema de \'{original_filename}\': {e_file_resp}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error al servir el archivo de esquema: {str(e_file_resp)}")
 
 
 # --- Endpoint para Generar Apuntes ---
 @app.post("/generar_apuntes/", response_class=FileResponse)
 async def generar_apuntes_endpoint(
-    background_tasks: BackgroundTasks,
+    # background_tasks: BackgroundTasks, # Removed
     transcripcion_file: UploadFile = File(..., description="Archivo de transcripción original (.txt)"),
     esquema_file: UploadFile = File(..., description="Archivo de esquema generado previamente (.txt)"),
     usar_cpu: bool = Query(False, description="Forzar el uso de CPU para esta solicitud.")
@@ -347,7 +249,6 @@ async def generar_apuntes_endpoint(
     # Similar manejo de CPU que en el endpoint de esquema
     if usar_cpu and not llm_processing.llm_instance.model_params.n_gpu_layers == 0:
         api_logger.warning("Se solicitó CPU, pero el modelo ya está cargado con GPU. Usando GPU.")
-        # Lógica de recarga iría aquí
 
     if llm_processing.llm_instance is None:
         api_logger.error("Modelo LLM no está disponible.")
@@ -357,15 +258,19 @@ async def generar_apuntes_endpoint(
         contenido_bytes_transcripcion = await transcripcion_file.read()
         texto_completo_transcripcion = contenido_bytes_transcripcion.decode("utf-8")
     except Exception as e:
-        api_logger.error(f"Error al leer/decodificar archivo de transcripción '{original_transcripcion_filename}': {e}", exc_info=True)
+        api_logger.error(f"Error al leer/decodificar archivo de transcripción \'{original_transcripcion_filename}\': {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Error al procesar archivo de transcripción: {e}")
+    finally:
+        await transcripcion_file.close()
 
     try:
         contenido_bytes_esquema = await esquema_file.read()
         esquema_texto = contenido_bytes_esquema.decode("utf-8")
     except Exception as e:
-        api_logger.error(f"Error al leer/decodificar archivo de esquema '{original_esquema_filename}': {e}", exc_info=True)
+        api_logger.error(f"Error al leer/decodificar archivo de esquema \'{original_esquema_filename}\': {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Error al procesar archivo de esquema: {e}")
+    finally:
+        await esquema_file.close()
 
     if not esquema_texto or not esquema_texto.strip():
         raise HTTPException(status_code=400, detail="El archivo de esquema no puede estar vacío.")
@@ -374,7 +279,7 @@ async def generar_apuntes_endpoint(
     apuntes_texto_final_md = None
     try:
         api_logger.info("Dividiendo el esquema en secciones para generar apuntes.")
-        secciones_del_esquema = re.split(r"\n(?=\d+\.\s)", esquema_texto.strip())
+        secciones_del_esquema = re.split(r"\n(?=\d+\.\s)", esquema_texto.strip()) # Ensure re is imported
         secciones_del_esquema = [s.strip() for s in secciones_del_esquema if s.strip()]
 
         apuntes_completos_md_list = []
@@ -383,7 +288,7 @@ async def generar_apuntes_endpoint(
                 esquema_texto, texto_completo_transcripcion, 1, 1
             )
             if apuntes_para_seccion_unica:
-                apuntes_completos_md_list.append(f"## Resumen General de la Clase\n{apuntes_para_seccion_unica.strip()}")
+                apuntes_completos_md_list.append(f"## Resumen General de la Clase\\n{apuntes_para_seccion_unica.strip()}")
         elif secciones_del_esquema:
             for i, seccion_esq_texto in enumerate(secciones_del_esquema):
                 apuntes_para_esta_seccion = llm_processing.generar_apuntes_por_seccion(
@@ -394,7 +299,7 @@ async def generar_apuntes_endpoint(
 
         if apuntes_completos_md_list:
             nombre_base_salida = os.path.splitext(original_transcripcion_filename)[0]
-            apuntes_texto_final_md = f"# Guía de Estudio Detallada: {nombre_base_salida}\n\n" + "\n\n".join(apuntes_completos_md_list)
+            apuntes_texto_final_md = f"# Guía de Estudio Detallada: {nombre_base_salida}\\n\\n" + "\\n\\n".join(apuntes_completos_md_list)
         else:
             api_logger.warning("No se generó contenido para los apuntes.")
             raise HTTPException(status_code=500, detail="No se pudo generar contenido para los apuntes.")
@@ -402,37 +307,41 @@ async def generar_apuntes_endpoint(
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e_apuntes:
-        api_logger.error(f"Error durante la generación de apuntes para '{original_transcripcion_filename}': {e_apuntes}", exc_info=True)
+        api_logger.error(f"Error durante la generación de apuntes para \'{original_transcripcion_filename}\': {e_apuntes}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno al generar apuntes: {str(e_apuntes)}")
 
-    # Guardar en archivo temporal y devolver FileResponse
+    # Guardar en archivo permanente en la carpeta output
     nombre_base_salida = os.path.splitext(original_transcripcion_filename)[0]
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    output_filename = f"{nombre_base_salida}_apuntes_local_{timestamp}.md"
+    output_dir_path = os.path.join(config.BASE_PROJECT_DIR, "output")
+    permanent_file_path_apuntes = os.path.join(output_dir_path, output_filename)
+
     try:
-        with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".md", encoding="utf-8", dir=os.path.join(config.BASE_PROJECT_DIR, "output")) as tmp_file:
-            tmp_file.write(apuntes_texto_final_md)
-            temp_file_path_apuntes = tmp_file.name
-        api_logger.info(f"Apuntes temporales para '{original_transcripcion_filename}' guardados en: {temp_file_path_apuntes}")
+        utils._ensure_output_dir_exists() # Ensure output dir exists
+        with open(permanent_file_path_apuntes, "w", encoding="utf-8") as f:
+            f.write(apuntes_texto_final_md)
+        api_logger.info(f"Apuntes para \'{original_transcripcion_filename}\' guardados permanentemente en: {permanent_file_path_apuntes}")
 
-        background_tasks.add_task(_cleanup_temp_file, temp_file_path_apuntes)
+        # background_tasks.add_task(utils._cleanup_temp_file, temp_file_path_apuntes) # Removed
 
-        api_logger.info(f"Devolviendo archivo de apuntes: {nombre_base_salida}_apuntes.md")
+        api_logger.info(f"Devolviendo archivo de apuntes: {output_filename}")
         processing_time = round(time.time() - request_start_time, 2)
-        api_logger.info(f"Tiempo total para generar apuntes de '{original_transcripcion_filename}': {processing_time} seg.")
+        api_logger.info(f"Tiempo total para generar apuntes de \'{original_transcripcion_filename}\': {processing_time} seg.")
 
         return FileResponse(
-            path=temp_file_path_apuntes,
-            filename=f"{nombre_base_salida}_apuntes.md",
+            path=permanent_file_path_apuntes,
+            filename=output_filename,
             media_type='text/markdown'
         )
     except Exception as e_file_resp_apuntes:
-        api_logger.error(f"Error al preparar FileResponse para apuntes de '{original_transcripcion_filename}': {e_file_resp_apuntes}", exc_info=True)
+        api_logger.error(f"Error al preparar FileResponse para apuntes de \'{original_transcripcion_filename}\': {e_file_resp_apuntes}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error al servir el archivo de apuntes: {str(e_file_resp_apuntes)}")
 
 
 # --- Endpoint para Generar Apuntes con Gemini (Simulado) ---
-@app.post("/generar_apuntes_gemini/", response_class=FileResponse)
+@app.post("/generar_apuntes_gemini/")
 async def generar_apuntes_gemini_endpoint(
-    background_tasks: BackgroundTasks,
     esquema_file: UploadFile = File(..., description="Archivo de esquema (.txt o .md)"),
     transcripcion_file: UploadFile = File(..., description="Archivo de transcripción (.txt)"),
 ):
@@ -444,14 +353,14 @@ async def generar_apuntes_gemini_endpoint(
         contenido_esquema_bytes = await esquema_file.read()
         esquema_contenido = contenido_esquema_bytes.decode("utf-8")
     except Exception as e:
-        api_logger.error(f"Error al leer/decodificar archivo de esquema '{esquema_file.filename}': {e}", exc_info=True)
+        api_logger.error(f"Error al leer/decodificar archivo de esquema \'{esquema_file.filename}\': {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Error al procesar archivo de esquema: {e}")
 
     try:
         contenido_transcripcion_bytes = await transcripcion_file.read()
         transcripcion_contenido = contenido_transcripcion_bytes.decode("utf-8")
     except Exception as e:
-        api_logger.error(f"Error al leer/decodificar archivo de transcripción '{transcripcion_file.filename}': {e}", exc_info=True)
+        api_logger.error(f"Error al leer/decodificar archivo de transcripción \'{transcripcion_file.filename}\': {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Error al procesar archivo de transcripción: {e}")
 
     # Usar directamente el prompt definido en prompts.py
@@ -469,7 +378,7 @@ async def generar_apuntes_gemini_endpoint(
     # Los parámetros max_terminos_consulta y top_k_por_termino pueden ser configurables si se desea,
     # por ejemplo, a través de config.py o como parámetros del endpoint (aunque la idea es que sea automático).
     # Por ahora, usamos valores por defecto (ej: 3 términos del esquema, 1 resultado por término).
-    informacion_contextual_formateada = await _extraer_y_consultar_terminos_esquema(
+    informacion_contextual_formateada = await utils._extraer_y_consultar_terminos_esquema(
         esquema_contenido, 
         max_terminos_consulta=config.MAX_SCHEMA_TERMS_TO_QUERY if hasattr(config, 'MAX_SCHEMA_TERMS_TO_QUERY') else 3,
         top_k_por_termino=config.VECTOR_DB_TOP_K_PER_TERM if hasattr(config, 'VECTOR_DB_TOP_K_PER_TERM') else 1
@@ -491,37 +400,34 @@ async def generar_apuntes_gemini_endpoint(
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e_gemini:
-        api_logger.error(f"Error durante la llamada a Gemini para '{transcripcion_file.filename}': {e_gemini}", exc_info=True)
+        api_logger.error(f"Error durante la llamada a Gemini para \'{transcripcion_file.filename}\': {e_gemini}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno al generar apuntes con Gemini: {str(e_gemini)}")
 
     # Guardar en archivo permanente en la carpeta output
     nombre_base_salida = os.path.splitext(transcripcion_file.filename)[0]
     output_filename = f"{nombre_base_salida}_apuntes_gemini.md"
-    output_dir = os.path.join(config.BASE_PROJECT_DIR, "output")
-    permanent_file_path_apuntes = os.path.join(output_dir, output_filename)
+    output_dir_path = os.path.join(config.BASE_PROJECT_DIR, "output") # Corrected variable name
+    permanent_file_path_apuntes = os.path.join(output_dir_path, output_filename)
 
     try:
-        _ensure_output_dir_exists() # Asegura que el directorio de salida exista
+        utils._ensure_output_dir_exists() 
 
         with open(permanent_file_path_apuntes, "w", encoding="utf-8") as f:
             f.write(apuntes_markdown_gemini)
         
-        api_logger.info(f"Apuntes de Gemini para '{transcripcion_file.filename}' guardados permanentemente en: {permanent_file_path_apuntes}")
-
-        # Ya no se usa background_tasks para eliminar este archivo
-        # background_tasks.add_task(_cleanup_temp_file, temp_file_path_apuntes) # Eliminado
+        api_logger.info(f"Apuntes de Gemini para \'{transcripcion_file.filename}\' guardados permanentemente en: {permanent_file_path_apuntes}")
 
         api_logger.info(f"Devolviendo archivo de apuntes (Gemini): {output_filename}")
         processing_time = round(time.time() - request_start_time, 2)
-        api_logger.info(f"Tiempo total para generar apuntes con Gemini para '{transcripcion_file.filename}': {processing_time} seg.")
+        api_logger.info(f"Tiempo total para generar apuntes con Gemini para \'{transcripcion_file.filename}\': {processing_time} seg.")
 
         return FileResponse(
             path=permanent_file_path_apuntes,
-            filename=output_filename, # Usar el nombre de archivo final
+            filename=output_filename,
             media_type='text/markdown'
         )
     except Exception as e_file_resp_apuntes:
-        api_logger.error(f"Error al preparar FileResponse para apuntes de Gemini '{transcripcion_file.filename}': {e_file_resp_apuntes}", exc_info=True)
+        api_logger.error(f"Error al preparar FileResponse para apuntes de Gemini \'{transcripcion_file.filename}\': {e_file_resp_apuntes}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error al servir el archivo de apuntes (Gemini): {str(e_file_resp_apuntes)}")
 
 

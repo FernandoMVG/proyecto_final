@@ -4,6 +4,9 @@ import time
 from contextlib import contextmanager
 import logging
 from src import config
+import requests
+import re
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -186,3 +189,97 @@ def contar_tokens_llama_cpp(texto, llm_instance):
     Cuenta el número de tokens en un texto dado utilizando una instancia de LLM.
     Esta función es un envoltorio para la tokenización específica de LLM.
     """
+
+# --- Funciones Helper movidas de api_main.py ---
+
+def _ensure_output_dir_exists():
+    """Asegura que el directorio de salida exista."""
+    output_dir = os.path.join(config.BASE_PROJECT_DIR, "output")
+    if not os.path.exists(output_dir):
+        try:
+            os.makedirs(output_dir)
+            logger.info(f"Directorio de salida creado: {output_dir}")
+        except Exception as e:
+            logger.error(f"No se pudo crear el directorio de salida \'{output_dir}\': {e}", exc_info=True)
+
+def _cleanup_temp_file(path: str):
+    """Función para eliminar un archivo temporal en segundo plano."""
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+            logger.info(f"Archivo temporal limpiado: {path}")
+    except Exception as e:
+        logger.warning(f"Error limpiando archivo temporal {path}: {e}")
+
+async def _query_vector_db(query: str, top_k: int = 3, page_start: Optional[int] = None, page_end: Optional[int] = None) -> list[dict]:
+    """
+    Consulta la base de datos vectorial para obtener información relevante.
+    """
+    params = {"q": query, "top_k": top_k}
+    if page_start is not None:
+        params["page_start"] = page_start
+    if page_end is not None:
+        params["page_end"] = page_end
+
+    try:
+        response = requests.get(f"{config.VECTOR_DB_BASE_URL}/query/", params=params)
+        response.raise_for_status()
+        return response.json().get("results", [])
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error al consultar la base de datos vectorial: {e}", exc_info=True)
+        return []
+
+async def _extraer_y_consultar_terminos_esquema(
+    esquema_contenido: str,
+    max_terminos_consulta: int = config.MAX_SCHEMA_TERMS_TO_QUERY if hasattr(config, 'MAX_SCHEMA_TERMS_TO_QUERY') else 3,
+    top_k_por_termino: int = config.VECTOR_DB_TOP_K_PER_TERM if hasattr(config, 'VECTOR_DB_TOP_K_PER_TERM') else 1
+) -> str:
+    """
+    Extrae términos clave del esquema, consulta la BD vectorial y formatea resultados.
+    """
+    logger.info(f"Extrayendo hasta {max_terminos_consulta} términos del esquema para consulta vectorial.")
+    lineas_esquema = esquema_contenido.splitlines()
+    terminos_extraidos = []
+    terminos_unicos_procesados = set()
+
+    for linea in lineas_esquema:
+        linea_limpia = re.sub(r"^\s*((\d+\.(?:\d+\.)*|[IVXLCDMivxlcdm]+\.|[a-zA-Z]\))\s*|#+\s*|\*\s*|-\s*|\+\s*)+", "", linea).strip()
+        
+        if len(linea_limpia) > 3 and not linea_limpia.isnumeric():
+            termino_normalizado = linea_limpia.lower()
+            if termino_normalizado not in terminos_unicos_procesados:
+                terminos_extraidos.append(linea_limpia)
+                terminos_unicos_procesados.add(termino_normalizado)
+        
+        if len(terminos_extraidos) >= max_terminos_consulta:
+            break
+    
+    if not terminos_extraidos:
+        logger.info("No se extrajeron términos significativos del esquema para consulta.")
+        return ""
+
+    logger.info(f"Términos extraídos para consulta: {terminos_extraidos}")
+    
+    informacion_contextual_acumulada = []
+    for termino in terminos_extraidos:
+        logger.info(f"Consultando base de datos vectorial para el término del esquema: '{termino}'")
+        resultados_vector_db = await _query_vector_db(query=termino, top_k=top_k_por_termino)
+        
+        if resultados_vector_db:
+            # Correctly escape quotes within f-string for the term
+            items_termino_actual = [f'Resultados para el término del esquema "{termino}":'] 
+            for res in resultados_vector_db:
+                texto = res.get("text", "No text available")
+                cita = res.get("citation", "No citation available")
+                # Use single backslash for newline in f-string
+                items_termino_actual.append(f"  - Texto: {texto}\n    Cita: {cita}") 
+            # Use single backslash for newline when joining
+            informacion_contextual_acumulada.append("\n".join(items_termino_actual)) 
+        else:
+            logger.info(f"No se encontró información en la BD vectorial para el término: '{termino}'")
+
+    if not informacion_contextual_acumulada:
+        logger.info("No se obtuvo información de la base de datos vectorial para los términos extraídos del esquema.")
+        return ""
+    # Use single backslashes for newlines in the final string construction
+    return "\n\n--- Información Adicional de la Base de Datos Vectorial (basada en el esquema) ---\n" + "\n\n".join(informacion_contextual_acumulada)
