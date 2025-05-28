@@ -19,7 +19,7 @@ OUTPUT_APUNTES_PATH = os.path.join(BASE_PROJECT_DIR, "output", OUTPUT_APUNTES_FI
 
 
 # --- Configuración del LLM ---
-CONTEXT_SIZE = 8192 #16384
+CONTEXT_SIZE = 8192 # Tamaño máximo de contexto para el modelo local (ajustar según memoria y modelo)
 MAX_TOKENS_ESQUEMA_PARCIAL = 1024
 MAX_TOKENS_ESQUEMA_FUSIONADO = 2048
 MAX_TOKENS_APUNTES_POR_SECCION = 1024
@@ -33,4 +33,7 @@ N_BATCH_LLAMA = 512
 
 # --- Configuración del Mega-Chunking (para generación de esquema si es necesario) ---
 MEGA_CHUNK_CONTEXT_FACTOR = 0.7
-MEGA_CHUNK_OVERLAP_TOKENS = 0
+MEGA_CHUNK_OVERLAP_TOKENS = 200 # Solapamiento de tokens para mega-chunks
+
+# --- Configuración específica de Gemini --- (NUEVO)
+GEMINI_MODEL_NAME = "gemini-2.5-flash-preview-05-20" # O el modelo que vayas a usar, ej: "gemini-pro models/gemini-2.5-flash-preview-05-20"

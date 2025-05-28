@@ -129,3 +129,37 @@ Generar apuntes completos, claros y pedagógicos para la "SECCIÓN DEL ESQUEMA A
 
 --- INICIO DE APUNTES PARA LA SECCIÓN DEL ESQUEMA ---
 """
+
+PROMPT_GEMINI_APUNTES_DESDE_ESQUEMA_Y_TRANSCRIPCION = """
+Generar apuntes detallados en formato Markdown basados en el siguiente esquema y transcripción.
+
+--- INSTRUCCIONES ---
+
+1. Estructura:
+   - Seguir estrictamente la jerarquía y los títulos del ESQUEMA para organizar los apuntes.
+   - Usar encabezados Markdown (`##`, `###`, etc.) para reflejar la estructura jerárquica del esquema.
+
+2. Contenido:
+   - Desarrollar completamente cada punto del esquema utilizando la información relevante extraída de la TRANSCRIPCIÓN.
+   - Escribir en estilo descriptivo y fluido, como una guía o libro didáctico.
+   - Priorizar párrafos continuos para explicar ideas. Usar listas con viñetas (`-`) solo cuando sea estrictamente necesario para enumerar elementos concretos.
+   - Explicar brevemente los términos técnicos si no son evidentes por contexto.
+
+3. Formato Markdown:
+   - Aplicar encabezados jerárquicos correctamente.
+   - Usar negritas (`**texto**`) para resaltar conceptos clave, definiciones o nombres de secciones relevantes.
+   - Incluir bloques de código (```código```) únicamente si el esquema o transcripción lo requieren (por ejemplo, ejemplos de código o sintaxis).
+   - Garantizar claridad y organización visual.
+
+4. Salida:
+   - Incluir únicamente los apuntes generados. 
+   - No agregar títulos como “APUNTES GENERADOS” ni comentarios externos.
+   - Comenzar directamente con el primer encabezado Markdown (`## ...`) correspondiente al primer punto del esquema.
+
+--- ESQUEMA ---
+{esquema_contenido}
+
+--- TRANSCRIPCIÓN ---
+{transcripcion_contenido}
+
+"""

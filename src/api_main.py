@@ -8,12 +8,17 @@ from typing import Optional
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form, BackgroundTasks
 from fastapi.responses import FileResponse
+from dotenv import load_dotenv # Importar load_dotenv
+import google.generativeai as genai # Importar Gemini SDK
 
 # Importar módulos de tu proyecto
 from src import config
 from src import utils
 from src import llm_processing
 from src import prompts
+
+# Cargar variables de entorno del archivo .env
+load_dotenv()
 
 # --- Configuración del Logging ---
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -71,6 +76,48 @@ def _cleanup_temp_file(path: str):
             api_logger.info(f"Archivo temporal limpiado: {path}")
     except Exception as e:
         api_logger.warning(f"Error limpiando archivo temporal {path}: {e}")
+
+async def _call_gemini_api_with_schema_and_transcription(esquema_contenido: str, transcripcion_contenido: str, prompt_texto: str) -> str:
+    """
+    Llama a la API de Gemini para generar apuntes.
+    """
+    api_logger.info("Iniciando llamada a la API de Gemini...")
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_api_key:
+        api_logger.error("GEMINI_API_KEY no encontrada en las variables de entorno.")
+        raise HTTPException(status_code=500, detail="Error de configuración: GEMINI_API_KEY no encontrada.")
+
+    try:
+        genai.configure(api_key=gemini_api_key)
+
+        # Formatear el prompt final con el esquema y la transcripción
+        # Asegúrate de que las claves {esquema_contenido} y {transcripcion_contenido}
+        # existan en tu `prompt_texto` (definido en prompts.py)
+        prompt_completo = prompt_texto.format(
+            esquema_contenido=esquema_contenido,
+            transcripcion_contenido=transcripcion_contenido
+        )
+
+        model = genai.GenerativeModel(config.GEMINI_MODEL_NAME) # ej: 'gemini-1.5-flash'
+        
+        api_logger.debug(f"Prompt completo enviado a Gemini: \\n{prompt_completo[:500]}...") # Loguea una parte del prompt
+
+        response = await model.generate_content_async(prompt_completo) # Usar async para no bloquear
+
+        if response and response.text:
+            api_logger.info("Respuesta recibida de la API de Gemini.")
+            return response.text
+        elif response and not response.text and response.prompt_feedback:
+            api_logger.error(f"Llamada a Gemini no devolvió texto. Feedback: {response.prompt_feedback}")
+            raise HTTPException(status_code=500, detail=f"Error de la API de Gemini: No se generó contenido. Feedback: {response.prompt_feedback}")
+        else:
+            api_logger.error("Respuesta inesperada o vacía de la API de Gemini.")
+            raise HTTPException(status_code=500, detail="Error de la API de Gemini: Respuesta inesperada o vacía.")
+
+    except Exception as e:
+        api_logger.error(f"Error durante la llamada a la API de Gemini: {e}", exc_info=True)
+        # Considerar si se quiere exponer detalles del error al cliente o un mensaje genérico
+        raise HTTPException(status_code=500, detail=f"Error interno al contactar la API de Gemini: {str(e)}")
 
 
 # --- Evento de Inicio de la Aplicación ---
@@ -297,6 +344,87 @@ async def generar_apuntes_endpoint(
     except Exception as e_file_resp_apuntes:
         api_logger.error(f"Error al preparar FileResponse para apuntes de '{original_transcripcion_filename}': {e_file_resp_apuntes}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error al servir el archivo de apuntes: {str(e_file_resp_apuntes)}")
+
+
+# --- Endpoint para Generar Apuntes con Gemini (Simulado) ---
+@app.post("/generar_apuntes_gemini/", response_class=FileResponse)
+async def generar_apuntes_gemini_endpoint(
+    background_tasks: BackgroundTasks,
+    esquema_file: UploadFile = File(..., description="Archivo de esquema (.txt o .md)"),
+    transcripcion_file: UploadFile = File(..., description="Archivo de transcripción (.txt)"),
+):
+    request_start_time = time.time()
+    api_logger.info(f"Solicitud para generar apuntes con Gemini. Esquema: {esquema_file.filename}, Transcripción: {transcripcion_file.filename}")
+
+
+    try:
+        contenido_esquema_bytes = await esquema_file.read()
+        esquema_contenido = contenido_esquema_bytes.decode("utf-8")
+    except Exception as e:
+        api_logger.error(f"Error al leer/decodificar archivo de esquema '{esquema_file.filename}': {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Error al procesar archivo de esquema: {e}")
+
+    try:
+        contenido_transcripcion_bytes = await transcripcion_file.read()
+        transcripcion_contenido = contenido_transcripcion_bytes.decode("utf-8")
+    except Exception as e:
+        api_logger.error(f"Error al leer/decodificar archivo de transcripción '{transcripcion_file.filename}': {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Error al procesar archivo de transcripción: {e}")
+
+    # Usar directamente el prompt definido en prompts.py
+    prompt_texto = prompts.PROMPT_GEMINI_APUNTES_DESDE_ESQUEMA_Y_TRANSCRIPCION
+    if not prompt_texto: # Verificación por si el prompt estuviera vacío o no definido correctamente
+        api_logger.error("El prompt PROMPT_GEMINI_APUNTES_DESDE_ESQUEMA_Y_TRANSCRIPCION no está definido o está vacío en src/prompts.py.")
+        raise HTTPException(status_code=500, detail="Error de configuración: Prompt para Gemini no encontrado o vacío.")
+
+    if not esquema_contenido.strip():
+        raise HTTPException(status_code=400, detail="El archivo de esquema no puede estar vacío.")
+    if not transcripcion_contenido.strip():
+        raise HTTPException(status_code=400, detail="El archivo de transcripción no puede estar vacío.")
+
+    # --- Lógica de Generación de Apuntes con Gemini (Simulado) ---
+    apuntes_markdown_gemini = None
+    try:
+        apuntes_markdown_gemini = await _call_gemini_api_with_schema_and_transcription(
+            esquema_contenido=esquema_contenido,
+            transcripcion_contenido=transcripcion_contenido,
+            prompt_texto=prompt_texto
+        )
+        if not apuntes_markdown_gemini or not apuntes_markdown_gemini.strip():
+            raise HTTPException(status_code=500, detail="La simulación de Gemini no devolvió contenido.")
+
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e_gemini:
+        api_logger.error(f"Error durante la llamada (simulada) a Gemini para '{transcripcion_file.filename}': {e_gemini}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno al generar apuntes con Gemini: {str(e_gemini)}")
+
+    # Guardar en archivo temporal y devolver FileResponse
+    nombre_base_salida = os.path.splitext(transcripcion_file.filename)[0]
+    try:
+        # Asegurarse que el directorio de output exista (ya se hace en startup, pero por si acaso)
+        _ensure_output_dir_exists()
+        output_dir = os.path.join(config.BASE_PROJECT_DIR, "output")
+
+        with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".md", encoding="utf-8", dir=output_dir) as tmp_file:
+            tmp_file.write(apuntes_markdown_gemini)
+            temp_file_path_apuntes = tmp_file.name
+        api_logger.info(f"Apuntes de Gemini (simulados) para '{transcripcion_file.filename}' guardados en: {temp_file_path_apuntes}")
+
+        background_tasks.add_task(_cleanup_temp_file, temp_file_path_apuntes)
+
+        api_logger.info(f"Devolviendo archivo de apuntes (Gemini): {nombre_base_salida}_apuntes_gemini.md")
+        processing_time = round(time.time() - request_start_time, 2)
+        api_logger.info(f"Tiempo total para generar apuntes con Gemini para '{transcripcion_file.filename}': {processing_time} seg.")
+
+        return FileResponse(
+            path=temp_file_path_apuntes,
+            filename=f"{nombre_base_salida}_apuntes_gemini.md",
+            media_type='text/markdown'
+        )
+    except Exception as e_file_resp_apuntes:
+        api_logger.error(f"Error al preparar FileResponse para apuntes de Gemini '{transcripcion_file.filename}': {e_file_resp_apuntes}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al servir el archivo de apuntes (Gemini): {str(e_file_resp_apuntes)}")
 
 
 # Add this endpoint to your api_main.py
