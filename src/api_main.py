@@ -298,4 +298,59 @@ async def generar_apuntes_endpoint(
         api_logger.error(f"Error al preparar FileResponse para apuntes de '{original_transcripcion_filename}': {e_file_resp_apuntes}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error al servir el archivo de apuntes: {str(e_file_resp_apuntes)}")
 
+
+# Add this endpoint to your api_main.py
+@app.get("/get_file/{filename}")
+async def get_file(filename: str):
+    """
+    Retrieve a file from the output directory by filename.
+    
+    Parameters:
+    - filename: The name of the file to retrieve (must exist in /app/output directory)
+    
+    Returns:
+    - FileResponse if file exists
+    - 404 if file doesn't exist
+    """
+    # Security check
+    if '/' in filename or '\\' in filename:
+        raise HTTPException(status_code=400, detail="Filename cannot contain path separators")
+    
+    # Use absolute path to the output directory
+    output_dir = "/app/output"
+    file_path = os.path.join(output_dir, filename)
+    
+    # Debugging info
+    api_logger.info(f"Absolute file path: {file_path}")
+    api_logger.info(f"Directory contents: {os.listdir(output_dir)}")
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(
+            status_code=404,
+            detail=f"File not found. Checked path: {file_path}"
+        )
+
+    return FileResponse(
+        path=file_path,
+        filename=filename,
+    )
+
+
+# Add this endpoint to your api_main.py
+@app.get("/list_files/")
+async def list_files():
+    """
+    List all files in the output directory.
+    
+    Returns:
+    - List of filenames in the /app/output directory
+    """
+    # Use absolute path to the output directory
+    output_dir = "/app/output"
+    
+    # Get the list of files in the directory
+    filenames = os.listdir(output_dir)
+    
+    return {"filenames": filenames}
+
 # Para ejecutar desde la raíz del proyecto: uvicorn src.api_main:app --reload
