@@ -121,19 +121,19 @@ async def startup_event():
 @app.post("/generar_esquema/", response_class=FileResponse)
 async def generar_esquema_endpoint(
     # background_tasks: BackgroundTasks, # Removed
-    file: UploadFile = File(..., description="Archivo de transcripción en formato .txt"),
-    usar_cpu: bool = Query(False, description="Forzar el uso de CPU para esta solicitud.")
+    file: UploadFile = File(..., description="Archivo de transcripción en formato .txt")
+    # usar_cpu: bool = Query(False, description="Forzar el uso de CPU para esta solicitud.") # Removed
 ):
     request_start_time = time.time()
     original_filename = file.filename
-    api_logger.info(f"Solicitud para generar esquema de: {original_filename}")
+    api_logger.info(f"Solicitud para generar esquema de: {original_filename}. Se usará la configuración de LLM cargada al inicio.")
 
     # Manejo de carga de modelo CPU/GPU (simplificado por ahora)
     # La carga inicial en startup usa GPU. Si se pide CPU aquí, idealmente se recargaría.
     # Por ahora, si se pide CPU y el modelo ya está en GPU, se usará GPU.
     # Una solución más robusta requeriría gestionar instancias de modelo separadas o recargas.
-    if usar_cpu and not llm_processing.llm_instance.model_params.n_gpu_layers == 0:
-        api_logger.warning("Se solicitó CPU, pero el modelo ya está cargado con GPU. Usando GPU.")
+    # if usar_cpu and not llm_processing.llm_instance.model_params.n_gpu_layers == 0: # Removed
+    #     api_logger.warning("Se solicitó CPU, pero el modelo ya está cargado con GPU. Usando GPU.") # Removed
     
     if llm_processing.llm_instance is None:
         api_logger.error("Modelo LLM no está disponible.")
@@ -238,17 +238,17 @@ async def generar_esquema_endpoint(
 async def generar_apuntes_endpoint(
     # background_tasks: BackgroundTasks, # Removed
     transcripcion_file: UploadFile = File(..., description="Archivo de transcripción original (.txt)"),
-    esquema_file: UploadFile = File(..., description="Archivo de esquema generado previamente (.txt)"),
-    usar_cpu: bool = Query(False, description="Forzar el uso de CPU para esta solicitud.")
+    esquema_file: UploadFile = File(..., description="Archivo de esquema generado previamente (.txt)")
+    # usar_cpu: bool = Query(False, description="Forzar el uso de CPU para esta solicitud.") # Removed
 ):
     request_start_time = time.time()
     original_transcripcion_filename = transcripcion_file.filename
     original_esquema_filename = esquema_file.filename
-    api_logger.info(f"Solicitud para generar apuntes basada en esquema para: {original_transcripcion_filename} y esquema: {original_esquema_filename}")
+    api_logger.info(f"Solicitud para generar apuntes basada en esquema para: {original_transcripcion_filename} y esquema: {original_esquema_filename}. Se usará la configuración de LLM cargada al inicio.")
 
     # Similar manejo de CPU que en el endpoint de esquema
-    if usar_cpu and not llm_processing.llm_instance.model_params.n_gpu_layers == 0:
-        api_logger.warning("Se solicitó CPU, pero el modelo ya está cargado con GPU. Usando GPU.")
+    # if usar_cpu and not llm_processing.llm_instance.model_params.n_gpu_layers == 0: # Removed
+    #     api_logger.warning("Se solicitó CPU, pero el modelo ya está cargado con GPU. Usando GPU.") # Removed
 
     if llm_processing.llm_instance is None:
         api_logger.error("Modelo LLM no está disponible.")
@@ -448,13 +448,16 @@ async def get_file(filename: str):
     if '/' in filename or '\\' in filename:
         raise HTTPException(status_code=400, detail="Filename cannot contain path separators")
     
-    # Use absolute path to the output directory
-    output_dir = "./output"
+    # Use path consistent with other endpoints
+    output_dir = os.path.join(config.BASE_PROJECT_DIR, "output")
     file_path = os.path.join(output_dir, filename)
     
     # Debugging info
-    api_logger.info(f"Absolute file path: {file_path}")
-    api_logger.info(f"Directory contents: {os.listdir(output_dir)}")
+    api_logger.info(f"Attempting to retrieve file from: {file_path}")
+    if os.path.exists(output_dir):
+        api_logger.info(f"Directory contents of {output_dir}: {os.listdir(output_dir)}")
+    else:
+        api_logger.warning(f"Output directory {output_dir} does not exist.")
     
     if not os.path.exists(file_path):
         raise HTTPException(
@@ -477,9 +480,13 @@ async def list_files():
     Returns:
     - List of filenames in the /app/output directory
     """
-    # Use absolute path to the output directory
-    output_dir = "./output"
+    # Use path consistent with other endpoints
+    output_dir = os.path.join(config.BASE_PROJECT_DIR, "output")
     
+    if not os.path.exists(output_dir) or not os.path.isdir(output_dir):
+        api_logger.warning(f"Output directory {output_dir} does not exist or is not a directory.")
+        return {"filenames": []}
+        
     # Get the list of files in the directory
     filenames = os.listdir(output_dir)
     
