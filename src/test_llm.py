@@ -70,9 +70,9 @@ def run_single_test_configuration(config_name: str, model_load_params: dict, ful
         print(f"Generated text (first 100 chars):\n'{generated_text[:100]}...'")
         print("")
         print("")
-        print("")
-        print("")
-        print(f"SALIDA COMPLETA DEL LLM: {output}")
+        # print("")
+        # print("")
+        # print(f"SALIDA COMPLETA DEL LLM: {output}")
 
     except Exception as e:
         print(f"ERROR during test '{config_name}': {e}")
@@ -123,23 +123,34 @@ def main():
     # For your E4s_v4 VM (4 vCPUs), testing with n_threads=4 is a good idea.
     configurations = [
         # CPU Tests
-        # ("CPU_default_threads_batch512", {"n_gpu_layers": 0, "n_threads": None, "n_batch": 512}),
-        # ("CPU_4_threads_batch512",       {"n_gpu_layers": 0, "n_threads": 4,    "n_batch": 512}),
-        # ("CPU_4_threads_batch256",       {"n_gpu_layers": 0, "n_threads": 4,    "n_batch": 256}),
-        
-        # GPU Offload Tests (adjust n_gpu_layers based on your VM's capabilities and model size)
-        # For a 7B Q4_K_M model (~4-5GB) and 32GB RAM, you can experiment with these.
-        # On a CPU-only VM, n_gpu_layers > 0 will still use RAM as if it were VRAM.
-        # ("GPU_10_layers_batch512",       {"n_gpu_layers": 10, "n_threads": None, "n_batch": 512}),
-        # ("GPU_10_layers_4_threads_batch512", {"n_gpu_layers": 10, "n_threads": 4, "n_batch": 512}),
-        # ("GPU_20_layers_batch512",       {"n_gpu_layers": 10, "n_threads": None, "n_batch": 256}), # Potentially heavy
-        ("GPU_20_layers_batch512",       {"n_gpu_layers": 20, "n_threads": 4, "n_batch": 256}),
-        # ("GPU_20_layers_batch512",       {"n_gpu_layers": 20, "n_threads": None, "n_batch": 512}),
-        # # ("GPU_20_layers_batch512",       {"n_gpu_layers": 20, "n_threads": 4, "n_batch": 512}),
-        # ("GPU_20_layers_batch512",       {"n_gpu_layers": 20, "n_threads": None, "n_batch": 256}),
+        ("CPU_default_threads_batch512", {"n_gpu_layers": 0, "n_threads": None, "n_batch": 64}),
+        ("CPU_4_threads_batch512",       {"n_gpu_layers": 0, "n_threads": 4,    "n_batch": 64}),
+        ("CPU_4_threads_batch256",       {"n_gpu_layers": 0, "n_threads": 6,    "n_batch": 64}),
+        ("CPU_default_threads_batch512", {"n_gpu_layers": 0, "n_threads": None, "n_batch": 128}),
+        ("CPU_4_threads_batch512",       {"n_gpu_layers": 0, "n_threads": 4,    "n_batch": 128}),
+        ("CPU_4_threads_batch256",       {"n_gpu_layers": 0, "n_threads": 6,    "n_batch": 128}),
+        ("CPU_default_threads_batch512", {"n_gpu_layers": 0, "n_threads": None, "n_batch": 264}),
+        ("CPU_4_threads_batch512",       {"n_gpu_layers": 0, "n_threads": 4,    "n_batch": 264}),
+        ("CPU_4_threads_batch256",       {"n_gpu_layers": 0, "n_threads": 6,    "n_batch": 264}),
+        ("CPU_default_threads_batch512", {"n_gpu_layers": 0, "n_threads": None, "n_batch": 512}),
+        ("CPU_4_threads_batch512",       {"n_gpu_layers": 0, "n_threads": 4,    "n_batch": 512}),
+        ("CPU_4_threads_batch256",       {"n_gpu_layers": 0, "n_threads": 6,    "n_batch": 512}), 
+        ("CPU_default_threads_batch512", {"n_gpu_layers": 0, "n_threads": None, "n_batch": 1024}),   
+        ("CPU_4_threads_batch512",       {"n_gpu_layers": 0, "n_threads": 4,    "n_batch": 1024}),
+        ("CPU_4_threads_batch256",       {"n_gpu_layers": 0, "n_threads": 6,    "n_batch": 1024}),   
+        # # GPU Offload Tests (adjust n_gpu_layers based on your VM's capabilities and model size)
+        # # For a 7B Q4_K_M model (~4-5GB) and 32GB RAM, you can experiment with these.
+        # # On a CPU-only VM, n_gpu_layers > 0 will still use RAM as if it were VRAM.
+        # # ("GPU_10_layers_batch512",       {"n_gpu_layers": 10, "n_threads": None, "n_batch": 512}),
+        # # ("GPU_10_layers_4_threads_batch512", {"n_gpu_layers": 10, "n_threads": 4, "n_batch": 512}),
+        # # ("GPU_20_layers_batch512",       {"n_gpu_layers": 10, "n_threads": None, "n_batch": 256}), # Potentially heavy
         # ("GPU_20_layers_batch512",       {"n_gpu_layers": 20, "n_threads": 4, "n_batch": 256}),
-        # ("GPU_20_layers_batch512",       {"n_gpu_layers": -1, "n_threads": None, "n_batch": 256}),
-        ("GPU_20_layers_batch512",       {"n_gpu_layers": -1, "n_threads": None, "n_batch": 512})
+        # # ("GPU_20_layers_batch512",       {"n_gpu_layers": 20, "n_threads": None, "n_batch": 512}),
+        # # # ("GPU_20_layers_batch512",       {"n_gpu_layers": 20, "n_threads": 4, "n_batch": 512}),
+        # # ("GPU_20_layers_batch512",       {"n_gpu_layers": 20, "n_threads": None, "n_batch": 256}),
+        # # ("GPU_20_layers_batch512",       {"n_gpu_layers": 20, "n_threads": 4, "n_batch": 256}),
+        # # ("GPU_20_layers_batch512",       {"n_gpu_layers": -1, "n_threads": None, "n_batch": 256}),
+        # ("GPU_20_layers_batch512",       {"n_gpu_layers": -1, "n_threads": None, "n_batch": 512})
     ]
 
     for name, params in configurations:
