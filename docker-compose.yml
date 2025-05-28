@@ -11,6 +11,8 @@ services:
     volumes:
       - ./models:/app/models
       - ./output:/app/output
+    env_file:
+      - .env 
     environment:
       - LOG_LEVEL=INFO
     # Si tu código espera otros archivos, agrega más volumenes aquí
