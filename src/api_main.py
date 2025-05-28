@@ -2,7 +2,7 @@
 import time
 import os
 import logging
-import re
+import re # Importar re para expresiones regulares
 import tempfile # Para archivos temporales
 from typing import Optional
 
@@ -10,6 +10,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form, Backg
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv # Importar load_dotenv
 import google.generativeai as genai # Importar Gemini SDK
+import requests # Para realizar peticiones HTTP
 
 # Importar módulos de tu proyecto
 from src import config
@@ -77,9 +78,92 @@ def _cleanup_temp_file(path: str):
     except Exception as e:
         api_logger.warning(f"Error limpiando archivo temporal {path}: {e}")
 
-async def _call_gemini_api_with_schema_and_transcription(esquema_contenido: str, transcripcion_contenido: str, prompt_texto: str) -> str:
+async def _query_vector_db(query: str, top_k: int = 3, page_start: Optional[int] = None, page_end: Optional[int] = None) -> list[dict]:
     """
-    Llama a la API de Gemini para generar apuntes.
+    Consulta la base de datos vectorial para obtener información relevante.
+    """
+    params = {"q": query, "top_k": top_k}
+    if page_start is not None:
+        params["page_start"] = page_start
+    if page_end is not None:
+        params["page_end"] = page_end
+
+    try:
+        response = requests.get(f"{config.VECTOR_DB_BASE_URL}/query/", params=params)
+        response.raise_for_status()  # Lanza una excepción para códigos de error HTTP
+        return response.json().get("results", [])
+    except requests.exceptions.RequestException as e:
+        api_logger.error(f"Error al consultar la base de datos vectorial: {e}", exc_info=True)
+        # Podrías decidir si lanzar una HTTPException aquí o devolver una lista vacía
+        # y manejarlo en la función que llama. Por ahora, devolvemos lista vacía.
+        return []
+
+
+async def _extraer_y_consultar_terminos_esquema(
+    esquema_contenido: str, 
+    max_terminos_consulta: int = config.MAX_SCHEMA_TERMS_TO_QUERY if hasattr(config, 'MAX_SCHEMA_TERMS_TO_QUERY') else 3,
+    top_k_por_termino: int = config.VECTOR_DB_TOP_K_PER_TERM if hasattr(config, 'VECTOR_DB_TOP_K_PER_TERM') else 1
+) -> str:
+    """
+    Extrae términos clave del esquema, consulta la base de datos vectorial con ellos
+    y formatea los resultados para incluirlos en el prompt de Gemini.
+    """
+    api_logger.info(f"Extrayendo hasta {max_terminos_consulta} términos del esquema para consulta vectorial.")
+    lineas_esquema = esquema_contenido.splitlines()
+    terminos_extraidos = []
+    terminos_unicos_procesados = set()
+
+    for linea in lineas_esquema:
+        # Corregida la expresión regular para manejar correctamente los paréntesis y la numeración.
+        linea_limpia = re.sub(r"^\s*((\d+\.(?:\d+\.)*|[IVXLCDMivxlcdm]+\.|[a-zA-Z]\))\s*|#+\s*|\*\s*|-\s*|\+\s*)+", "", linea).strip()
+        
+        # Considerar solo líneas con suficiente contenido y que no sean solo espacios o números residuales
+        if len(linea_limpia) > 3 and not linea_limpia.isnumeric(): # Evitar líneas muy cortas o solo números
+            # Normalizar un poco (ej. minúsculas) para evitar duplicados por capitalización
+            termino_normalizado = linea_limpia.lower() 
+            if termino_normalizado not in terminos_unicos_procesados:
+                terminos_extraidos.append(linea_limpia) # Guardar el original para la consulta
+                terminos_unicos_procesados.add(termino_normalizado)
+        
+        if len(terminos_extraidos) >= max_terminos_consulta:
+            break
+    
+    if not terminos_extraidos:
+        api_logger.info("No se extrajeron términos significativos del esquema para consulta.")
+        return ""
+
+    api_logger.info(f"Términos extraídos para consulta: {terminos_extraidos}")
+    
+    informacion_contextual_acumulada = []
+    for termino in terminos_extraidos:
+        api_logger.info(f"Consultando base de datos vectorial para el término del esquema: \'{termino}\'")
+        resultados_vector_db = await _query_vector_db(query=termino, top_k=top_k_por_termino)
+        
+        if resultados_vector_db:
+            items_termino_actual = [f"Resultados para el término del esquema \\\"{termino}\\\":"]
+            for res in resultados_vector_db:
+                texto = res.get("text", "No text available")
+                cita = res.get("citation", "No citation available")
+                items_termino_actual.append(f"  - Texto: {texto}\\n    Cita: {cita}")
+            informacion_contextual_acumulada.append("\\n".join(items_termino_actual))
+        else:
+            api_logger.info(f"No se encontró información en la BD vectorial para el término: \'{termino}\'")
+
+    if not informacion_contextual_acumulada:
+        api_logger.info("No se obtuvo información de la base de datos vectorial para los términos extraídos del esquema.")
+        return ""
+
+    return "\\n\\n--- Información Adicional de la Base de Datos Vectorial (basada en el esquema) ---\\n" + "\\n\\n".join(informacion_contextual_acumulada)
+
+
+async def _call_gemini_api_with_schema_and_transcription(
+    esquema_contenido: str, 
+    transcripcion_contenido: str, 
+    prompt_texto: str,
+    informacion_contextual: Optional[str] = None  # Nuevo parámetro
+) -> str:
+    """
+    Llama a la API de Gemini para generar apuntes, opcionalmente con información contextual.
     """
     api_logger.info("Iniciando llamada a la API de Gemini...")
     gemini_api_key = os.getenv("GEMINI_API_KEY")
@@ -90,14 +174,13 @@ async def _call_gemini_api_with_schema_and_transcription(esquema_contenido: str,
     try:
         genai.configure(api_key=gemini_api_key)
 
-        # Formatear el prompt final con el esquema y la transcripción
-        # Asegúrate de que las claves {esquema_contenido} y {transcripcion_contenido}
-        # existan en tu `prompt_texto` (definido en prompts.py)
+        # Formatear el prompt final con el esquema, la transcripción y la información contextual si existe
         prompt_completo = prompt_texto.format(
             esquema_contenido=esquema_contenido,
-            transcripcion_contenido=transcripcion_contenido
+            transcripcion_contenido=transcripcion_contenido,
+            informacion_contextual_adicional=informacion_contextual if informacion_contextual else "" 
         )
-
+        
         model = genai.GenerativeModel(config.GEMINI_MODEL_NAME) # ej: 'gemini-1.5-flash'
         
         api_logger.debug(f"Prompt completo enviado a Gemini: \\n{prompt_completo[:500]}...") # Loguea una parte del prompt
@@ -354,8 +437,8 @@ async def generar_apuntes_gemini_endpoint(
     transcripcion_file: UploadFile = File(..., description="Archivo de transcripción (.txt)"),
 ):
     request_start_time = time.time()
-    api_logger.info(f"Solicitud para generar apuntes con Gemini. Esquema: {esquema_file.filename}, Transcripción: {transcripcion_file.filename}")
-
+    log_message = f"Solicitud para generar apuntes con Gemini. Esquema: {esquema_file.filename}, Transcripción: {transcripcion_file.filename}. Se realizará consulta automática a BD vectorial basada en esquema."
+    api_logger.info(log_message)
 
     try:
         contenido_esquema_bytes = await esquema_file.read()
@@ -382,13 +465,24 @@ async def generar_apuntes_gemini_endpoint(
     if not transcripcion_contenido.strip():
         raise HTTPException(status_code=400, detail="El archivo de transcripción no puede estar vacío.")
 
-    # --- Lógica de Generación de Apuntes con Gemini (Simulado) ---
+    # --- Consultar Base de Datos Vectorial automáticamente basada en el esquema ---
+    # Los parámetros max_terminos_consulta y top_k_por_termino pueden ser configurables si se desea,
+    # por ejemplo, a través de config.py o como parámetros del endpoint (aunque la idea es que sea automático).
+    # Por ahora, usamos valores por defecto (ej: 3 términos del esquema, 1 resultado por término).
+    informacion_contextual_formateada = await _extraer_y_consultar_terminos_esquema(
+        esquema_contenido, 
+        max_terminos_consulta=config.MAX_SCHEMA_TERMS_TO_QUERY if hasattr(config, 'MAX_SCHEMA_TERMS_TO_QUERY') else 3,
+        top_k_por_termino=config.VECTOR_DB_TOP_K_PER_TERM if hasattr(config, 'VECTOR_DB_TOP_K_PER_TERM') else 1
+    )
+
+    # --- Lógica de Generación de Apuntes con Gemini ---
     apuntes_markdown_gemini = None
     try:
         apuntes_markdown_gemini = await _call_gemini_api_with_schema_and_transcription(
             esquema_contenido=esquema_contenido,
             transcripcion_contenido=transcripcion_contenido,
-            prompt_texto=prompt_texto
+            prompt_texto=prompt_texto,
+            informacion_contextual=informacion_contextual_formateada # Pasar la información formateada
         )
         if not apuntes_markdown_gemini or not apuntes_markdown_gemini.strip():
             # api_logger.warning("La simulación de Gemini no devolvió contenido.") # Comentado o eliminado si se prefiere error directo

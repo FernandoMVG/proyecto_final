@@ -130,8 +130,9 @@ Generar apuntes completos, claros y pedagógicos para la "SECCIÓN DEL ESQUEMA A
 --- INICIO DE APUNTES PARA LA SECCIÓN DEL ESQUEMA ---
 """
 
-PROMPT_GEMINI_APUNTES_DESDE_ESQUEMA_Y_TRANSCRIPCION = """
+PROMPT_GEMINI_APUNTES_DESDE_ESQUEMA_Y_TRANSCRIPCION = """\
 Generar apuntes detallados en formato Markdown basados en el siguiente esquema y transcripción.
+Si se proporciona "Información Adicional de la Base de Datos Vectorial", intégrala de forma natural en los apuntes donde sea relevante, y asegúrate de citar la fuente usando la "Cita" proporcionada para cada fragmento de información adicional. Por ejemplo: "(Fuente: <Cita aquí>)".
 
 --- INSTRUCCIONES ---
 
@@ -144,6 +145,7 @@ Generar apuntes detallados en formato Markdown basados en el siguiente esquema y
    - Escribir en estilo descriptivo y fluido, como una guía o libro didáctico.
    - Priorizar párrafos continuos para explicar ideas. Usar listas con viñetas (`-`) solo cuando sea estrictamente necesario para enumerar elementos concretos.
    - Explicar brevemente los términos técnicos si no son evidentes por contexto.
+   - **Integración de Información Adicional:** Si se incluye la sección "Información Adicional de la Base de Datos Vectorial", revisa cada ítem. Si un ítem es relevante para la sección actual de los apuntes que estás desarrollando, incorpóralo de manera fluida y cita su origen. Ejemplo: "Además, según investigaciones recientes, se ha encontrado que X es Y (Fuente: Nombre del Artículo, Año, p. Z)."
 
 3. Formato Markdown:
    - Aplicar encabezados jerárquicos correctamente.
@@ -161,5 +163,7 @@ Generar apuntes detallados en formato Markdown basados en el siguiente esquema y
 
 --- TRANSCRIPCIÓN ---
 {transcripcion_contenido}
+
+{informacion_contextual_adicional} # Placeholder para la información de la BD vectorial
 
 """

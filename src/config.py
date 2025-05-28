@@ -35,5 +35,10 @@ N_BATCH_LLAMA = 512
 MEGA_CHUNK_CONTEXT_FACTOR = 0.7
 MEGA_CHUNK_OVERLAP_TOKENS = 200 # Solapamiento de tokens para mega-chunks
 
-# --- Configuración específica de Gemini --- (NUEVO)
-GEMINI_MODEL_NAME = "gemini-2.5-flash-preview-05-20" # O el modelo que vayas a usar, ej: "gemini-pro models/gemini-2.5-flash-preview-05-20"
+# --- Configuración específica de Gemini ---
+GEMINI_MODEL_NAME = "gemini-2.5-flash-preview-05-20" # O el modelo que vayas a usa
+
+# --- Configuración de la Base de Datos Vectorial ---
+VECTOR_DB_BASE_URL = "http://localhost:9000" # URL base para el servicio de búsqueda vectorial
+MAX_SCHEMA_TERMS_TO_QUERY = 3 # Número máximo de términos a extraer del esquema para consultar la BD vectorial
+VECTOR_DB_TOP_K_PER_TERM = 1 # Número de resultados a obtener de la BD vectorial por cada término del esquema consultado
