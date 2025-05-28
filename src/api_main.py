@@ -391,35 +391,39 @@ async def generar_apuntes_gemini_endpoint(
             prompt_texto=prompt_texto
         )
         if not apuntes_markdown_gemini or not apuntes_markdown_gemini.strip():
-            raise HTTPException(status_code=500, detail="La simulación de Gemini no devolvió contenido.")
+            # api_logger.warning("La simulación de Gemini no devolvió contenido.") # Comentado o eliminado si se prefiere error directo
+            raise HTTPException(status_code=500, detail="La API de Gemini no devolvió contenido.")
 
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e_gemini:
-        api_logger.error(f"Error durante la llamada (simulada) a Gemini para '{transcripcion_file.filename}': {e_gemini}", exc_info=True)
+        api_logger.error(f"Error durante la llamada a Gemini para '{transcripcion_file.filename}': {e_gemini}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno al generar apuntes con Gemini: {str(e_gemini)}")
 
-    # Guardar en archivo temporal y devolver FileResponse
+    # Guardar en archivo permanente en la carpeta output
     nombre_base_salida = os.path.splitext(transcripcion_file.filename)[0]
+    output_filename = f"{nombre_base_salida}_apuntes_gemini.md"
+    output_dir = os.path.join(config.BASE_PROJECT_DIR, "output")
+    permanent_file_path_apuntes = os.path.join(output_dir, output_filename)
+
     try:
-        # Asegurarse que el directorio de output exista (ya se hace en startup, pero por si acaso)
-        _ensure_output_dir_exists()
-        output_dir = os.path.join(config.BASE_PROJECT_DIR, "output")
+        _ensure_output_dir_exists() # Asegura que el directorio de salida exista
 
-        with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".md", encoding="utf-8", dir=output_dir) as tmp_file:
-            tmp_file.write(apuntes_markdown_gemini)
-            temp_file_path_apuntes = tmp_file.name
-        api_logger.info(f"Apuntes de Gemini (simulados) para '{transcripcion_file.filename}' guardados en: {temp_file_path_apuntes}")
+        with open(permanent_file_path_apuntes, "w", encoding="utf-8") as f:
+            f.write(apuntes_markdown_gemini)
+        
+        api_logger.info(f"Apuntes de Gemini para '{transcripcion_file.filename}' guardados permanentemente en: {permanent_file_path_apuntes}")
 
-        background_tasks.add_task(_cleanup_temp_file, temp_file_path_apuntes)
+        # Ya no se usa background_tasks para eliminar este archivo
+        # background_tasks.add_task(_cleanup_temp_file, temp_file_path_apuntes) # Eliminado
 
-        api_logger.info(f"Devolviendo archivo de apuntes (Gemini): {nombre_base_salida}_apuntes_gemini.md")
+        api_logger.info(f"Devolviendo archivo de apuntes (Gemini): {output_filename}")
         processing_time = round(time.time() - request_start_time, 2)
         api_logger.info(f"Tiempo total para generar apuntes con Gemini para '{transcripcion_file.filename}': {processing_time} seg.")
 
         return FileResponse(
-            path=temp_file_path_apuntes,
-            filename=f"{nombre_base_salida}_apuntes_gemini.md",
+            path=permanent_file_path_apuntes,
+            filename=output_filename, # Usar el nombre de archivo final
             media_type='text/markdown'
         )
     except Exception as e_file_resp_apuntes:
@@ -445,7 +449,7 @@ async def get_file(filename: str):
         raise HTTPException(status_code=400, detail="Filename cannot contain path separators")
     
     # Use absolute path to the output directory
-    output_dir = "/app/output"
+    output_dir = "./output"
     file_path = os.path.join(output_dir, filename)
     
     # Debugging info
@@ -474,7 +478,7 @@ async def list_files():
     - List of filenames in the /app/output directory
     """
     # Use absolute path to the output directory
-    output_dir = "/app/output"
+    output_dir = "./output"
     
     # Get the list of files in the directory
     filenames = os.listdir(output_dir)
