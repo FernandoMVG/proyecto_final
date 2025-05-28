@@ -33,4 +33,4 @@ N_BATCH_LLAMA = 512
 
 # --- Configuración del Mega-Chunking (para generación de esquema si es necesario) ---
 MEGA_CHUNK_CONTEXT_FACTOR = 0.7
-MEGA_CHUNK_OVERLAP_WORDS = 0
+MEGA_CHUNK_OVERLAP_TOKENS = 0 # Anteriormente MEGA_CHUNK_OVERLAP_WORDS, ahora se basa en tokens

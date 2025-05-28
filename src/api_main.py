@@ -151,7 +151,7 @@ async def generar_esquema_endpoint(
             mega_chunks = utils.dividir_en_mega_chunks(
                 texto_completo_transcripcion,
                 max_tokens_para_contenido_en_mega_chunk_individual,
-                config.MEGA_CHUNK_OVERLAP_WORDS, # Actualmente 0
+                config.MEGA_CHUNK_OVERLAP_TOKENS, # Cambiado de MEGA_CHUNK_OVERLAP_WORDS
                 llm_tokenizer_instance=llm_processing.llm_instance
             )
             if not mega_chunks: raise HTTPException(status_code=500, detail="No se generaron mega-chunks.")
