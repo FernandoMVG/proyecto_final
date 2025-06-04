@@ -103,8 +103,8 @@ Generar apuntes completos, claros y pedagógicos para la "SECCIÓN DEL ESQUEMA A
 --- INSTRUCCIONES ---
 1.  Seguir la estructura del esquema:
     - Tomar la "SECCIÓN DEL ESQUEMA A DESARROLLAR" como guía de estructura.
-    - Usar el primer ítem como encabezado Markdown principal (`##`).
-    - Desarrollar subpuntos con encabezados (`###`, `####`) o listas con viñetas, según corresponda.
+    - Usar el primer ítem como encabezado Markdown principal (`#`).
+    - Desarrollar subpuntos con encabezados (`##`, `###`, etc) o listas con viñetas, según corresponda.
 
 2.  Elaborar contenido desde la transcripción:
     - Buscar la información correspondiente para cada punto en el contexto de transcripción.
@@ -117,7 +117,7 @@ Generar apuntes completos, claros y pedagógicos para la "SECCIÓN DEL ESQUEMA A
     - No inventar ni completar con contenido genérico.
 
 4.  Formatear en Markdown:
-    - Usar `##`, `###`, `####`, etc para jerarquía.
+    - Usar `#`, `##`, `###`, etc para jerarquía.
     - Usar `-` o `*` para listas clave.
     - Resaltar términos importantes con **negrita** dentro de párrafos.
     - Usar bloques de código para ejemplos técnicos.
@@ -125,7 +125,7 @@ Generar apuntes completos, claros y pedagógicos para la "SECCIÓN DEL ESQUEMA A
 5.  Control de la salida:
     - La salida debe contener únicamente los apuntes de la sección.
     - No incluir preámbulos, explicaciones adicionales ni conclusiones.
-    - Comenzar directamente con el primer encabezado Markdown (`## ...`)
+    - Comenzar directamente con el primer encabezado Markdown (`# ...`)
 
 --- INICIO DE APUNTES PARA LA SECCIÓN DEL ESQUEMA ---
 """
@@ -138,7 +138,7 @@ Si se proporciona "Información Adicional de la Base de Datos Vectorial", intég
 
 1. Estructura:
    - Seguir estrictamente la jerarquía y los títulos del ESQUEMA para organizar los apuntes.
-   - Usar encabezados Markdown (`##`, `###`, etc.) para reflejar la estructura jerárquica del esquema.
+   - Usar encabezados Markdown (`#`, `##`, `###`, etc.) para reflejar la estructura jerárquica del esquema.
 
 2. Contenido:
    - Desarrollar completamente cada punto del esquema utilizando la información relevante extraída de la TRANSCRIPCIÓN.
@@ -156,7 +156,7 @@ Si se proporciona "Información Adicional de la Base de Datos Vectorial", intég
 4. Salida:
    - Incluir únicamente los apuntes generados. 
    - No agregar títulos como “APUNTES GENERADOS” ni comentarios externos.
-   - Comenzar directamente con el primer encabezado Markdown (`## ...`) correspondiente al primer punto del esquema.
+   - Comenzar directamente con el primer encabezado Markdown (`# ...`) correspondiente al primer punto del esquema.
 
 --- ESQUEMA ---
 {esquema_contenido}

@@ -4,7 +4,7 @@ import os
 import logging
 from typing import Optional
 import re # Ensure re is imported
-
+from pydantic import BaseModel
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query, BackgroundTasks
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv # Importar load_dotenv
@@ -54,6 +54,9 @@ app = FastAPI(
     description="Procesa transcripciones para generar esquemas jerárquicos y, opcionalmente, apuntes detallados.",
     version="0.2.0"
 )
+
+class GuiaContenidoUpdate(BaseModel):
+    contenido: str
 
 # --- Funciones Helper para la API ---
 
@@ -606,5 +609,35 @@ async def list_files():
     filenames = os.listdir(output_dir)
     
     return {"filenames": filenames}
+
+@app.put("/guias/{filename}/contenido") # Puedes usar PUT o POST
+async def actualizar_contenido_guia(filename: str, guia_actualizada: GuiaContenidoUpdate):
+    """
+    Actualiza el contenido de un archivo de guía específico.
+    """
+    # Medidas de seguridad básicas para el nombre del archivo
+    if '/' in filename or '\\' in filename or '..' in filename:
+        api_logger.warning(f"Intento de actualización de archivo con nombre inválido: {filename}")
+        raise HTTPException(status_code=400, detail="Nombre de archivo inválido.")
+
+    output_dir = os.path.join(config.BASE_PROJECT_DIR, "output")
+    file_path = os.path.join(output_dir, filename)
+
+    api_logger.info(f"Solicitud para actualizar contenido de guía: {filename} en {file_path}")
+
+    # Es importante verificar que el archivo exista si solo quieres actualizar existentes.
+    # Si quisieras permitir crear un nuevo archivo si no existe, la lógica cambiaría aquí.
+    if not os.path.exists(file_path):
+        api_logger.error(f"Archivo de guía no encontrado para actualizar: {file_path}")
+        raise HTTPException(status_code=404, detail=f"Archivo de guía '{filename}' no encontrado para actualizar.")
+
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(guia_actualizada.contenido)
+        api_logger.info(f"Contenido de guía '{filename}' actualizado exitosamente.")
+        return {"message": f"Guía '{filename}' actualizada exitosamente."}
+    except Exception as e:
+        api_logger.error(f"Error al escribir archivo de guía '{filename}' durante la actualización: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al guardar los cambios de la guía: {str(e)}")
 
 # Para ejecutar desde la raíz del proyecto: uvicorn src.api_main:app --reload
