@@ -10,14 +10,15 @@ from fastapi.responses import FileResponse
 from dotenv import load_dotenv # Importar load_dotenv
 import google.generativeai as genai # Importar Gemini SDK
 
+# Cargar variables de entorno del archivo .env
+load_dotenv()
+
 # Importar módulos de tu proyecto
 from src import config
 from src import utils
 from src import llm_processing
 from src import prompts
 
-# Cargar variables de entorno del archivo .env
-load_dotenv()
 
 # --- Configuración del Logging ---
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
