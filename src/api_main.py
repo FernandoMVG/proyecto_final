@@ -56,6 +56,46 @@ app = FastAPI(
 
 # --- Funciones Helper para la API ---
 
+async def _call_gemini_api_for_schema(
+    transcripcion_contenido: str,
+    prompt_template: str
+) -> str:
+    """
+    Llama a la API de Gemini para generar un esquema a partir de una transcripción.
+    """
+    api_logger.info("Iniciando llamada a la API de Gemini para generar esquema...")
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_api_key:
+        api_logger.error("GEMINI_API_KEY no encontrada en las variables de entorno.")
+        raise HTTPException(status_code=500, detail="Error de configuración: GEMINI_API_KEY no encontrada.")
+
+    try:
+        genai.configure(api_key=gemini_api_key)
+
+        prompt_completo = prompt_template.format(
+            transcripcion_contenido=transcripcion_contenido
+        )
+        
+        model = genai.GenerativeModel(config.GEMINI_MODEL_NAME)
+        
+        api_logger.debug(f"Prompt para esquema Gemini (primeros 500 chars): \\n{prompt_completo[:500]}...")
+
+        response = await model.generate_content_async(prompt_completo)
+
+        if response and response.text:
+            api_logger.info("Esquema recibido de la API de Gemini.")
+            return response.text
+        elif response and not response.text and response.prompt_feedback:
+            api_logger.error(f"Llamada a Gemini (esquema) no devolvió texto. Feedback: {response.prompt_feedback}")
+            raise HTTPException(status_code=500, detail=f"Error de la API de Gemini (esquema): No se generó contenido. Feedback: {response.prompt_feedback}")
+        else:
+            api_logger.error("Respuesta inesperada o vacía de la API de Gemini (esquema).")
+            raise HTTPException(status_code=500, detail="Error de la API de Gemini (esquema): Respuesta inesperada o vacía.")
+
+    except Exception as e:
+        api_logger.error(f"Error durante la llamada a la API de Gemini para generar esquema: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno al contactar la API de Gemini para esquema: {str(e)}")
+
 async def _call_gemini_api_with_schema_and_transcription(
     esquema_contenido: str, 
     transcripcion_contenido: str, 
@@ -337,6 +377,78 @@ async def generar_apuntes_endpoint(
     except Exception as e_file_resp_apuntes:
         api_logger.error(f"Error al preparar FileResponse para apuntes de \'{original_transcripcion_filename}\': {e_file_resp_apuntes}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error al servir el archivo de apuntes: {str(e_file_resp_apuntes)}")
+    
+
+# --- Endpoint para Generar Esquema con Gemini ---
+@app.post("/generar_esquema_gemini/", response_class=FileResponse)
+async def generar_esquema_gemini_endpoint(
+    file: UploadFile = File(..., description="Archivo de transcripción en formato .txt")
+):
+    request_start_time = time.time()
+    original_filename = file.filename
+    api_logger.info(f"Solicitud para generar esquema con Gemini de: {original_filename}.")
+
+    try:
+        contenido_bytes = await file.read()
+        texto_completo_transcripcion = contenido_bytes.decode("utf-8")
+    except Exception as e:
+        api_logger.error(f"Error al leer/decodificar archivo \'{original_filename}\' para esquema Gemini: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Error al procesar archivo: {e}")
+    finally:
+        await file.close()
+
+    if not texto_completo_transcripcion.strip():
+        raise HTTPException(status_code=400, detail="El archivo de transcripción no puede estar vacío.")
+
+    api_logger.info(f"Transcripción \'{original_filename}\' leída para esquema Gemini: {len(texto_completo_transcripcion.split())} palabras.")
+
+    # --- Lógica de Generación de Esquema con Gemini ---
+    esquema_gemini_texto = None
+    try:
+        prompt_template_esquema_gemini = prompts.PROMPT_GEMINI_GENERAR_ESQUEMA_TEMPLATE
+        if not prompt_template_esquema_gemini:
+            api_logger.error("El prompt PROMPT_GEMINI_GENERAR_ESQUEMA_TEMPLATE no está definido o está vacío.")
+            raise HTTPException(status_code=500, detail="Error de configuración: Prompt para esquema Gemini no encontrado.")
+
+        esquema_gemini_texto = await _call_gemini_api_for_schema(
+            transcripcion_contenido=texto_completo_transcripcion,
+            prompt_template=prompt_template_esquema_gemini
+        )
+
+        if not esquema_gemini_texto or not esquema_gemini_texto.strip():
+            raise HTTPException(status_code=500, detail="La API de Gemini no devolvió contenido para el esquema.")
+
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e_esquema_gemini:
+        api_logger.error(f"Error durante la generación del esquema con Gemini para \'{original_filename}\': {e_esquema_gemini}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno al generar el esquema con Gemini: {str(e_esquema_gemini)}")
+
+    # Guardar en archivo permanente en la carpeta output
+    nombre_base_salida = os.path.splitext(original_filename)[0]
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    output_filename = f"{nombre_base_salida}_esquema_gemini_{timestamp}.txt"
+    output_dir_path = os.path.join(config.BASE_PROJECT_DIR, "output")
+    permanent_file_path = os.path.join(output_dir_path, output_filename)
+
+    try:
+        utils._ensure_output_dir_exists() 
+        with open(permanent_file_path, "w", encoding="utf-8") as f:
+            f.write(esquema_gemini_texto)
+        api_logger.info(f"Esquema de Gemini para \'{original_filename}\' guardado permanentemente en: {permanent_file_path}")
+        
+        api_logger.info(f"Devolviendo archivo de esquema (Gemini): {output_filename}")
+        processing_time = round(time.time() - request_start_time, 2)
+        api_logger.info(f"Tiempo total para generar esquema con Gemini de \'{original_filename}\': {processing_time} seg.")
+
+        return FileResponse(
+            path=permanent_file_path,
+            filename=output_filename,
+            media_type='text/plain'
+        )
+    except Exception as e_file_resp:
+        api_logger.error(f"Error al preparar FileResponse para esquema de Gemini \'{original_filename}\': {e_file_resp}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al servir el archivo de esquema (Gemini): {str(e_file_resp)}")
 
 
 # --- Endpoint para Generar Apuntes con Gemini (Simulado) ---
@@ -429,6 +541,8 @@ async def generar_apuntes_gemini_endpoint(
     except Exception as e_file_resp_apuntes:
         api_logger.error(f"Error al preparar FileResponse para apuntes de Gemini \'{transcripcion_file.filename}\': {e_file_resp_apuntes}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error al servir el archivo de apuntes (Gemini): {str(e_file_resp_apuntes)}")
+    
+    
 
 
 # Add this endpoint to your api_main.py

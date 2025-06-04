@@ -167,3 +167,29 @@ Si se proporciona "Información Adicional de la Base de Datos Vectorial", intég
 {informacion_contextual_adicional} # Placeholder para la información de la BD vectorial
 
 """
+
+PROMPT_GEMINI_GENERAR_ESQUEMA_TEMPLATE = """Eres un asistente experto en análisis académico y estructuración de contenido.
+Tu entrada es una transcripción COMPLETA de una clase universitaria.
+
+--- OBJETIVO ---
+Analizar la transcripción completa y generar un ESQUEMA JERÁRQUICO detallado del contenido.
+El esquema debe usar numeración jerárquica (1., 1.1., 1.1.1., etc.) y reflejar los temas, subtemas, conceptos clave, definiciones y ejemplos de la clase, siguiendo el flujo lógico.
+
+--- INSTRUCCIONES ---
+1.  Identificar los temas principales globales de la clase (nivel 1).
+2.  Desglosar cada tema en subtemas específicos (nivel 2).
+3.  Incluir detalles relevantes como definiciones, conceptos, ejemplos o preguntas/respuestas (nivel 3+).
+4.  Omitir contenido no académico, como divagaciones, interrupciones logísticas y conversaciones administrativas.
+5.  Mantener el orden original de la presentación.
+6.  Usar frases concisas en cada punto. No escribir párrafos.
+7.  Escribir los ítems como texto plano, sin negritas, cursivas u otro tipo de marcado.
+8.  Utilizar únicamente numeración jerárquica (1., 1.1., 1.1.1., etc.). No utilizar viñetas ni símbolos adicionales.
+9.  La salida debe ser exclusivamente el esquema. No incluir resúmenes, títulos ni explicaciones externas.
+10. Identa correctamente el esquema con espacios o tabulaciones para reflejar la jerarquía.
+
+--- TRANSCRIPCIÓN COMPLETA ---
+{transcripcion_contenido}
+--- FIN TRANSCRIPCIÓN COMPLETA ---
+
+ESQUEMA JERÁRQUICO DE LA CLASE (comenzar directamente con 1.):
+"""
