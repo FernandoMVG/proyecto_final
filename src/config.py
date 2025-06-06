@@ -14,18 +14,31 @@ OUTPUT_ESQUEMA_FILENAME = "esquema_clase_2.Q4_K_M.txt"
 OUTPUT_ESQUEMA_PATH = os.path.join(BASE_PROJECT_DIR, "output", OUTPUT_ESQUEMA_FILENAME)
 TEMPLATE_TRANSCRIPCION_FILENAME = "ejemplo_transcripcion_template.txt"
 TEMPLATE_TRANSCRIPCION_PATH = os.path.join(BASE_PROJECT_DIR, "templates", TEMPLATE_TRANSCRIPCION_FILENAME) 
+OUTPUT_APUNTES_FILENAME = "apuntes_clase_final.md"
+OUTPUT_APUNTES_PATH = os.path.join(BASE_PROJECT_DIR, "output", OUTPUT_APUNTES_FILENAME)
+
 
 # --- Configuración del LLM ---
-CONTEXT_SIZE = 8192 #16384
+CONTEXT_SIZE = 12000 # Tamaño máximo de contexto para el modelo local (ajustar según memoria y modelo)
 MAX_TOKENS_ESQUEMA_PARCIAL = 1024
 MAX_TOKENS_ESQUEMA_FUSIONADO = 2048
-N_GPU_LAYERS = -1  # -1 para cargar todas las capas posibles en GPU
-N_THREADS = None     # None para que Llama.cpp decida (usualmente óptimo)
+MAX_TOKENS_APUNTES_POR_SECCION = 1024
+N_GPU_LAYERS = 0
+N_THREADS = 4     # None para que Llama.cpp decida (usualmente óptimo)
 LLM_VERBOSE = False
 LLM_TEMPERATURE_ESQUEMA = 0.3
-LLM_TEMPERATURE_FUSION = 0.2
-N_BATCH_LLAMA = 512
+LLM_TEMPERATURE_FUSION = 0.4
+LLM_TEMPERATURE_APUNTES = 0.4
+N_BATCH_LLAMA = 1024
 
 # --- Configuración del Mega-Chunking (para generación de esquema si es necesario) ---
 MEGA_CHUNK_CONTEXT_FACTOR = 0.7
-MEGA_CHUNK_OVERLAP_WORDS = 0
+MEGA_CHUNK_OVERLAP_TOKENS = 0 # Solapamiento de tokens para mega-chunks
+
+# --- Configuración específica de Gemini ---
+GEMINI_MODEL_NAME = "gemini-2.5-flash-preview-05-20" # O el modelo que vayas a usa
+
+# --- Configuración de la Base de Datos Vectorial ---
+VECTOR_DB_BASE_URL = os.getenv("VECTOR_DB_URL", "http://localhost:9000") # URL base para el servicio de búsqueda vectorial
+MAX_SCHEMA_TERMS_TO_QUERY = 3 # Número máximo de términos a extraer del esquema para consultar la BD vectorial
+VECTOR_DB_TOP_K_PER_TERM = 1 # Número de resultados a obtener de la BD vectorial por cada término del esquema consultado

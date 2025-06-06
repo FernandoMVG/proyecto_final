@@ -2,6 +2,7 @@
 from llama_cpp import Llama
 import os
 import time
+import re
 import logging # <--- Importar logging
 from src import config
 from src import prompts
@@ -62,19 +63,73 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
     num_tokens_prompt_reales = 0
     try:
         if llm_instance:
-            num_tokens_prompt_reales = len(llm_instance.tokenize(prompt_texto.encode('utf-8', 'ignore')))
+            # Asegurarse de que prompt_texto sea string antes de encodear
+            if not isinstance(prompt_texto, str):
+                logger.error(f"(LLM Call) prompt_texto para '{descripcion_tarea}' no es una cadena (tipo: {type(prompt_texto)}). No se puede tokenizar.")
+                # Considerar devolver un error aquí o un valor por defecto para num_tokens_prompt_reales
+                # Por ahora, se quedará en 0 y la lógica posterior podría manejarlo o fallar.
+            else:
+                tokens_del_prompt = llm_instance.tokenize(prompt_texto.encode('utf-8', 'ignore'))
+                num_tokens_prompt_reales = len(tokens_del_prompt)
         else:
             logger.warning(f"llm_instance no disponible para tokenizar prompt para '{descripcion_tarea}' (conteo previo).")
     except Exception as e_tok:
         logger.warning(f"No se pudo tokenizar el prompt para '{descripcion_tarea}' para conteo previo: {e_tok}")
 
-    logger.info(f"Enviando prompt al LLM para '{descripcion_tarea}' (~{num_tokens_prompt_reales} tokens), "
-                f"max_tokens_out: {max_tokens_salida}, temp: {temperatura}.")
+    # --- Inicio de la lógica de cálculo dinámico de tokens de salida ---
+    espacio_contexto_total_llm = config.CONTEXT_SIZE
+    margen_seguridad_tokens = 20  # Margen para tokens especiales, BOS/EOS, etc.
 
+    espacio_disponible_para_salida_bruto = 0
+    if num_tokens_prompt_reales > 0:
+        espacio_disponible_para_salida_bruto = (
+            espacio_contexto_total_llm 
+            - num_tokens_prompt_reales 
+            - margen_seguridad_tokens
+        )
+    else:
+        # Si no pudimos contar los tokens del prompt, no podemos calcular dinámicamente de forma segura.
+        # Usaremos el max_tokens_salida configurado, pero con una advertencia.
+        logger.warning(f"No se pudo determinar num_tokens_prompt_reales para '{descripcion_tarea}'. "
+                       f"Se usará el max_tokens_salida configurado ({max_tokens_salida}) directamente, "
+                       f"pero podría haber riesgo de exceder el contexto.")
+    
+    # Asegurar que el espacio disponible no sea negativo
+    espacio_disponible_para_salida_calculado = max(0, espacio_disponible_para_salida_bruto)
+
+    # max_tokens_salida (parámetro de la función) es el límite superior configurado.
+    # El valor final a usar será el mínimo entre el disponible y el configurado.
+    if num_tokens_prompt_reales > 0: # Solo ajustar dinámicamente si conocemos los tokens del prompt
+        max_tokens_a_usar_en_llm = min(espacio_disponible_para_salida_calculado, max_tokens_salida)
+    else: # Fallback si no se conocen los tokens del prompt
+        max_tokens_a_usar_en_llm = max_tokens_salida
+    
+    if max_tokens_a_usar_en_llm <= 0 and max_tokens_salida > 0:
+        logger.error(f"Cálculo dinámico resultó en 0 o menos tokens para la salida de '{descripcion_tarea}' "
+                     f"(Prompt: {num_tokens_prompt_reales}, Disponible Bruto: {espacio_disponible_para_salida_bruto}, Configurado: {max_tokens_salida}). "
+                     f"No se llamará al LLM. Revisar CONTEXT_SIZE y longitud del prompt.")
+        # Asegurar que las variables de estadísticas se inicialicen si no se llama al LLM
+        stats = {
+            "tokens_prompt": num_tokens_prompt_reales, # O el mejor estimado que tengamos
+            "tokens_generados": 0,
+            "processing_time_seconds": 0,
+            "tokens_por_segundo": 0
+        }
+        return None, "zero_tokens_for_output", stats
+    # --- Fin de la lógica de cálculo dinámico ---
+
+    logger.info(f"Enviando prompt al LLM para '{descripcion_tarea}' ({num_tokens_prompt_reales} tokens), "
+                f"max_tokens_out (dinámico): {max_tokens_a_usar_en_llm} (configurado: {max_tokens_salida}), temp: {temperatura}.")
+
+    # Advertencia actualizada sobre posible desbordamiento
     if num_tokens_prompt_reales > 0 and \
-       (num_tokens_prompt_reales + max_tokens_salida) > config.CONTEXT_SIZE * 0.98:
-        logger.warning(f"El prompt actual ({num_tokens_prompt_reales} tokens) + salida ({max_tokens_salida}) "
-                       f"podría exceder CONTEXT_SIZE ({config.CONTEXT_SIZE}). Total: {num_tokens_prompt_reales + max_tokens_salida}")
+       (num_tokens_prompt_reales + max_tokens_a_usar_en_llm + margen_seguridad_tokens) > espacio_contexto_total_llm:
+        logger.warning(
+            f"ALERTA DE CONTEXTO para '{descripcion_tarea}': Prompt ({num_tokens_prompt_reales}) + Salida Solicitada ({max_tokens_a_usar_en_llm}) "
+            f"+ Margen ({margen_seguridad_tokens}) = {num_tokens_prompt_reales + max_tokens_a_usar_en_llm + margen_seguridad_tokens} tokens. "
+            f"Esto está muy cerca o excede el CONTEXT_SIZE ({espacio_contexto_total_llm}). "
+            f"Espacio disponible calculado (bruto): {espacio_disponible_para_salida_bruto}."
+        )
     
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(f"Prompt para '{descripcion_tarea}':\n'''\n{prompt_texto[:500]}...\n'''")
@@ -83,7 +138,7 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
     try:
         output = llm_instance(
             prompt_texto,
-            max_tokens=max_tokens_salida,
+            max_tokens=max_tokens_a_usar_en_llm, # <--- USAR EL VALOR DINÁMICO
             stop=stop_sequences,
             echo=False,
             temperature=temperatura,
@@ -91,11 +146,11 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
         )
         
         end_time_llm = time.time()
-        processing_time = end_time_llm - start_time_llm
+        processing_time = end_time_llm - start_time_llm # Definir processing_time aquí
 
         texto_generado = ""
         finish_reason = "desconocido"
-        tokens_generados = 0
+        tokens_generados = 0 # Inicializar tokens_generados
         tokens_prompt_from_usage = 0
 
         if output and 'choices' in output and len(output['choices']) > 0:
@@ -107,7 +162,8 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
             tokens_generados = usage_stats.get('completion_tokens', 0)
             if tokens_generados == 0 and texto_generado:
                 try:
-                    tokens_generados = len(llm_instance.tokenize(texto_generado.encode('utf-8', 'ignore')))
+                    if llm_instance: # Asegurar que llm_instance exista
+                        tokens_generados = len(llm_instance.tokenize(texto_generado.encode('utf-8', 'ignore')))
                 except Exception as e:
                      logger.debug(f"No se pudo tokenizar el texto generado para fallback: {e}")
 
@@ -115,9 +171,16 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
         
         else:
             logger.warning(f"La salida del LLM para '{descripcion_tarea}' fue inesperada o vacía. Output: {output}")
-            return None, "empty_or_invalid_llm_output", {"tokens_prompt": num_tokens_prompt_reales}
+            # Inicializar stats para el retorno en caso de salida inválida
+            stats = {
+                "tokens_prompt": num_tokens_prompt_reales, 
+                "tokens_generados": 0,
+                "processing_time_seconds": processing_time if 'processing_time' in locals() else 0,
+                "tokens_por_segundo": 0
+            }
+            return None, "empty_or_invalid_llm_output", stats
 
-        final_tokens_prompt_stat = tokens_prompt_from_usage
+        final_tokens_prompt_stat = tokens_prompt_from_usage # Definir final_tokens_prompt_stat aquí
         if final_tokens_prompt_stat == 0:
             if num_tokens_prompt_reales > 0:
                 final_tokens_prompt_stat = num_tokens_prompt_reales
@@ -127,7 +190,7 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
                 except Exception:
                     pass 
 
-        tokens_por_segundo = 0
+        tokens_por_segundo = 0 # Inicializar tokens_por_segundo
         if processing_time > 0 and tokens_generados > 0:
             tokens_por_segundo = tokens_generados / processing_time
         
@@ -154,7 +217,14 @@ def _llamar_al_llm(prompt_texto, max_tokens_salida, temperatura, descripcion_tar
 
     except Exception as e:
         logger.error(f"Durante la llamada al LLM para '{descripcion_tarea}': {e}", exc_info=True)
-        return None, f"exception_during_llm_call: {str(e)}", {"tokens_prompt": num_tokens_prompt_reales}
+        # Asegurar que las variables de estadísticas se inicialicen en caso de excepción
+        stats = {
+            "tokens_prompt": num_tokens_prompt_reales, # O el mejor estimado
+            "tokens_generados": 0,
+            "processing_time_seconds": 0,
+            "tokens_por_segundo": 0
+        }
+        return None, f"exception_during_llm_call: {str(e)}", stats
 
 
 def generar_esquema_de_texto(texto_para_esquema, es_parcial=False, chunk_num=None, total_chunks=None):
@@ -205,11 +275,70 @@ def fusionar_esquemas(lista_esquemas_parciales):
         texto_esquemas_concatenados += f"--- ESQUEMA PARCIAL {i+1} ---\n{esquema_p}\n\n"
     
     prompt_final_fusion = prompts.PROMPT_FUSIONAR_ESQUEMAS_TEMPLATE.format(texto_esquemas_parciales=texto_esquemas_concatenados)
+
+    stop_sequences_fusion = [
+        "\n\n--- FIN DE LA RESPUESTA ---",
+        "\n---", # Una secuencia más genérica por si acaso
+        "\nEste esquema maestro fusionado representa" # Otra parte del texto no deseado
+    ]
     
     esquema_fusionado, _, _ = _llamar_al_llm(
         prompt_texto=prompt_final_fusion,
         max_tokens_salida=config.MAX_TOKENS_ESQUEMA_FUSIONADO,
         temperatura=config.LLM_TEMPERATURE_FUSION,
-        descripcion_tarea="Fusión de Esquemas"
+        descripcion_tarea="Fusión de Esquemas",
+        stop_sequences=stop_sequences_fusion
     )
     return esquema_fusionado
+
+def generar_apuntes_por_seccion(seccion_esquema_actual, transcripcion_completa, num_seccion=None, total_secciones=None):
+    """
+    Genera apuntes para una sección específica del esquema, usando la transcripción completa como contexto.
+    """
+    if llm_instance is None:
+        logger.critical("Modelo LLM no cargado. No se pueden generar apuntes para la sección.")
+        return "" 
+    if not seccion_esquema_actual or not seccion_esquema_actual.strip():
+        logger.warning(f"Sección del esquema vacía proporcionada (Sección {num_seccion or '?'}). Saltando.")
+        return ""
+    if not transcripcion_completa:
+        logger.error("Transcripción completa no proporcionada. No se pueden generar apuntes.")
+        return ""
+
+    # Extraer un título corto de la sección para logging
+    primera_linea_seccion = seccion_esquema_actual.strip().split('\n')[0]
+    titulo_seccion_log = re.sub(r"^\s*\d+(\.\d+)*\.\s*", "", primera_linea_seccion).strip() # Quitar numeración
+    titulo_seccion_log = titulo_seccion_log[:50] + "..." if len(titulo_seccion_log) > 50 else titulo_seccion_log
+    
+    descripcion_tarea = f"Apuntes para Sección {num_seccion or '?'}/{total_secciones or '?'} ('{titulo_seccion_log}')"
+    logger.info(f"Iniciando generación de {descripcion_tarea}")
+
+    prompt_final_apuntes = prompts.PROMPT_GENERAR_APUNTES_POR_SECCION_TEMPLATE.format(
+        seccion_del_esquema_actual=seccion_esquema_actual,
+        contexto_relevante_de_transcripcion=transcripcion_completa # Pasando la transcripción completa
+    )
+
+    # Advertencia sobre el tamaño del prompt (transcripción completa + sección del esquema + prompt template)
+    # Esto es solo una estimación muy burda porque tokenizar todo aquí sería costoso.
+    # El conteo real y la advertencia más precisa ocurrirán dentro de _llamar_al_llm.
+    len_prompt_aprox_palabras = len(prompt_final_apuntes.split())
+    if len_prompt_aprox_palabras * 0.7 > config.CONTEXT_SIZE : # Asumiendo ~0.7 tokens/palabra (muy conservador)
+         logger.warning(f"El prompt para '{descripcion_tarea}' (incluyendo transcripción completa) "
+                        f"es potencialmente MUY GRANDE (~{len_prompt_aprox_palabras} palabras). "
+                        "Podría exceder el límite de contexto.")
+
+    # Definir secuencias de parada para evitar texto no deseado al final de los apuntes de sección
+    stop_sequences_apuntes = [
+        "\n\n--- FIN DE APUNTES ---", # Ejemplo, ajustar si es necesario
+        "\n\n## " # Si empieza a generar la siguiente sección por error
+    ]
+
+    apuntes_seccion, _, _ = _llamar_al_llm(
+        prompt_texto=prompt_final_apuntes,
+        max_tokens_salida=config.MAX_TOKENS_APUNTES_POR_SECCION,
+        temperatura=config.LLM_TEMPERATURE_APUNTES,
+        descripcion_tarea=descripcion_tarea,
+        stop_sequences=stop_sequences_apuntes
+    )
+
+    return apuntes_seccion if apuntes_seccion else ""
